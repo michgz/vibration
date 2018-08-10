@@ -3,8 +3,8 @@
 # project subdirectory.
 #
 
-CONFIG_TOOLPREFIX ?= "../../Tools_Downloads/xtensa-esp32-elf/bin/xtensa-esp32-elf-"
-IDF_PATH ?= ../../esp/esp-idf
+CONFIG_TOOLPREFIX ?= "../../../Tools_Downloads/xtensa-esp32-elf/bin/xtensa-esp32-elf-"
+IDF_PATH ?= ../../../esp/esp-idf
 
 PROJECT_NAME := my_pwm
 SRCDIRS := .
