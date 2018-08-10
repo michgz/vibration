@@ -23,6 +23,8 @@
 #include "lwip/sockets.h"
 #include "lwip/netdb.h"
 
+#include "task_pwm.h"
+
 static EventGroupHandle_t wifi_event_group;
 
 /* The event group allows multiple bits for each event,
@@ -185,6 +187,8 @@ reconnect:
                 sscanf(&i1[5], "%f", &ff);
                 sscanf(&i2[5], "%f", &aa);
                 ESP_LOGI(TAG, "%0.6f  ::  %0.6f", ff, aa);
+
+                app_main_do_pwm();
             }
         }
     } while (1);
