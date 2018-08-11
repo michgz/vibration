@@ -28,6 +28,7 @@
 
 #include "task_wifi.h"
 #include "task_pwm.h"
+#include "task_sensor.h"
 
 const static char *TAG = "TASK_MAIN";
 
@@ -144,6 +145,8 @@ void app_main(void)
     // All done, unmount partition and disable SPIFFS
     esp_vfs_spiffs_unregister(NULL);
     ESP_LOGI(TAG, "SPIFFS unmounted");
+
+    app_main_task_sensor();
 
     wifi_conn_init();
 }
