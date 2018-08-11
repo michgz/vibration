@@ -146,7 +146,7 @@ void app_main(void)
     esp_vfs_spiffs_unregister(NULL);
     ESP_LOGI(TAG, "SPIFFS unmounted");
 
-    app_main_task_sensor();
+//    app_main_task_sensor();
 
     wifi_conn_init();
 }

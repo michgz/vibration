@@ -24,6 +24,7 @@
 #include "lwip/netdb.h"
 
 #include "task_pwm.h"
+#include "web_pages.h"
 
 static EventGroupHandle_t wifi_event_group;
 
@@ -34,21 +35,6 @@ const static int CONNECTED_BIT = BIT0;
 
 const static char *TAG = "TASK_WIFI";
 
-#define OPENSSL_EXAMPLE_SERVER_ACK "HTTP/1.1 200 OK\r\n" \
-                                "Content-Type: text/html\r\n" \
-                                "Content-Length: 299\r\n\r\n" \
-                                "<html>\r\n" \
-                                "<head>\r\n" \
-                                "<title>Assistant</title></head><body>\r\n" \
-                                "<form action=\"#\" method=\"post\">\r\n" \
-                                " Frequency: <input type=\"text\" name=\"freq\" value=\"18.5\"> Hz<br>\r\n" \
-                                " Amplitude: <input type=\"text\" name=\"ampl\" value=\"-22.0\"> dB<br>\r\n" \
-                                "<input type=\"submit\" value=\"Submit\">\r\n" \
-                                "</form>\r\n" \
-                                "<a href=\"/0001\">0001</a>\r\n" \
-                                "</body>\r\n" \
-                                "</html>\r\n" \
-                                "\r\n"
 
 static void openssl_example_task(void *p)
 {
@@ -62,9 +48,6 @@ static void openssl_example_task(void *p)
     struct sockaddr_in sock_addr;
 
     char recv_buf[OPENSSL_EXAMPLE_RECV_BUF_LEN];
-
-    const char send_data[] = OPENSSL_EXAMPLE_SERVER_ACK;
-    const int send_bytes = sizeof(send_data);
 
     extern const unsigned char cacert_pem_start[] asm("_binary_cacert_pem_start");
     extern const unsigned char cacert_pem_end[]   asm("_binary_cacert_pem_end");
@@ -164,11 +147,24 @@ reconnect:
         if (ret <= 0) {
             break;
         }
+        
+        static char send_data [1024];
+        static int send_bytes = 0;
+        
+        
         ESP_LOGI(TAG, "SSL read: %s", recv_buf);
         if (strstr(recv_buf, "GET ") &&
             strstr(recv_buf, " HTTP/1.1")) {
             ESP_LOGI(TAG, "SSL get matched message");
             ESP_LOGI(TAG, "SSL write message");
+            
+            create_web_page(send_data, 1024);
+            
+            send_bytes = strlen(send_data);
+            
+            ESP_LOGI(TAG, "Send data len = %d", send_bytes);
+            ESP_LOGI(TAG, "Send data: %s", send_data);
+            
             ret = SSL_write(ssl, send_data, send_bytes);
             if (ret > 0) {
                 ESP_LOGI(TAG, "OK");
@@ -188,8 +184,24 @@ reconnect:
                 sscanf(&i2[5], "%f", &aa);
                 ESP_LOGI(TAG, "%0.6f  ::  %0.6f", ff, aa);
 
-                app_main_do_pwm();
+                //app_main_do_pwm();
             }
+            ESP_LOGI(TAG, "SSL write message");
+
+            create_web_page(send_data, 1024);
+            
+            send_bytes = strlen(send_data);
+            
+            ESP_LOGI(TAG, "Send data len = %d", send_bytes);
+            ESP_LOGI(TAG, "Send data: %s", send_data);
+            
+            ret = SSL_write(ssl, send_data, send_bytes);
+            if (ret > 0) {
+                ESP_LOGI(TAG, "OK");
+            } else {
+                ESP_LOGI(TAG, "error");
+            }
+            break;
         }
     } while (1);
     
