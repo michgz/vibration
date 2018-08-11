@@ -32,7 +32,7 @@
 #define I2C_MASTER_NUM             I2C_NUM_1        /*!< I2C port number for master dev */
 #define I2C_MASTER_TX_BUF_DISABLE  0                /*!< I2C master do not need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE  0                /*!< I2C master do not need buffer */
-#define I2C_MASTER_FREQ_HZ         100000           /*!< I2C master clock frequency */
+#define I2C_MASTER_FREQ_HZ         1000000          /*!< I2C master clock frequency */
 
 #define ADXL355_SENSOR_ADDR   0x1D
 #define ADXL355_CMD_DEVID_AD  0x00
@@ -81,7 +81,7 @@ static esp_err_t i2c_adxl_read_single_register(i2c_port_t i2c_num, uint8_t addr,
     if (ret != ESP_OK) {
         return ret;
     }
-    vTaskDelay(30 / portTICK_RATE_MS);
+    //vTaskDelay(30 / portTICK_RATE_MS);
     cmd = i2c_cmd_link_create();
     i2c_master_start(cmd);
     i2c_master_write_byte(cmd, ADXL355_SENSOR_ADDR << 1 | READ_BIT, ACK_CHECK_EN);
@@ -106,11 +106,11 @@ static esp_err_t i2c_adxl_read_multiple(i2c_port_t i2c_num, uint8_t addr, uint8_
     if (ret != ESP_OK) {
         return ret;
     }
-    vTaskDelay(30 / portTICK_RATE_MS);
+    //vTaskDelay(30 / portTICK_RATE_MS);
     cmd = i2c_cmd_link_create();
     i2c_master_start(cmd);
     i2c_master_write_byte(cmd, ADXL355_SENSOR_ADDR << 1 | READ_BIT, ACK_CHECK_EN);
-    i2c_master_read(cmd, data_rd, size, NACK_VAL);
+    i2c_master_read(cmd, data_rd, size, ACK_VAL);
     i2c_master_stop(cmd);
     ret = i2c_master_cmd_begin(i2c_num, cmd, 1000 / portTICK_RATE_MS);
     i2c_cmd_link_delete(cmd);
@@ -132,7 +132,7 @@ static esp_err_t i2c_adxl_read_device_id(i2c_port_t i2c_num, uint8_t data[4])
     if (ret != ESP_OK) {
         return ret;
     }
-    vTaskDelay(30 / portTICK_RATE_MS);
+    //vTaskDelay(30 / portTICK_RATE_MS);
     cmd = i2c_cmd_link_create();
     i2c_master_start(cmd);
     i2c_master_write_byte(cmd, ADXL355_SENSOR_ADDR << 1 | READ_BIT, ACK_CHECK_EN);
@@ -167,6 +167,31 @@ static void i2c_example_master_init()
 }
 
 
+/* Decode the 3-byte reading into a value in g. Relies on the range being
+ * as set by default (register 0x2C), which is +-2g.    */
+static float adxl_decode_reading(uint8_t raw_data[3])
+{
+    uint32_t z;
+
+    z = (((uint32_t)raw_data[0]) << 12)   +
+         (((uint32_t)raw_data[1]) << 4)   +
+         (((uint32_t)raw_data[2]) >> 4);
+
+    if ((z & 0x80000UL) == 0)
+    {
+        // The reading is >= 0
+        return  ((float) (z & 0x7FFFFUL)) / 256000.0;
+    }
+    else
+    {
+        // The reading is < 0
+        z = -z;
+        return  -1.0 * (((float) (z & 0x7FFFFUL)) / 256000.0);
+    }
+
+}
+
+
 static void i2c_test_task(void* arg)
 {
     int ret;
@@ -192,7 +217,7 @@ static void i2c_test_task(void* arg)
 
             (void) i2c_adxl_write_single_register(I2C_MASTER_NUM, ADXL355_CMD_POWER_CTL, 2);  // Start measuring
 
-            while(count_readings<100)
+            while(count_readings<500)
             {
 
                 (void) ulTaskNotifyTake( pdFALSE, portMAX_DELAY );
@@ -205,15 +230,19 @@ static void i2c_test_task(void* arg)
 
                 if (ESP_OK == i2c_adxl_read_single_register(I2C_MASTER_NUM, ADXL355_CMD_STATUS, &status_byte))
                 {
+                    //ESP_LOGI(TAG, "before status = %02X", status_byte);
+
                     if ((status_byte & 0x01) != 0)
                     {
                         uint8_t readings [9];
 
                         (void) i2c_adxl_read_multiple(I2C_MASTER_NUM, ADXL355_CMD_XDATA3, readings, 9);
 
-                        //ESP_LOGI(TAG, "Got a reading");
-
+                        //ESP_LOGI(TAG, "Reading: %0.6f, %0.6f, %0.6f", adxl_decode_reading(&readings[0]), adxl_decode_reading(&readings[3]), adxl_decode_reading(&readings[6]));
                         count_readings ++;
+
+                        //(void) i2c_adxl_read_single_register(I2C_MASTER_NUM, ADXL355_CMD_STATUS, &status_byte);
+                        //ESP_LOGI(TAG, "after status = %02X", status_byte);
                     }
                 }
             }
@@ -236,7 +265,7 @@ static void i2c_test_task(void* arg)
 
 #define TIMER_DIVIDER         16  //  Hardware timer clock divider
 #define TIMER_SCALE           (TIMER_BASE_CLK / TIMER_DIVIDER)  // convert counter value to seconds
-#define TIMER_INTERVAL0_SEC   (0.002)   // sample test interval for the first timer
+#define TIMER_INTERVAL0_SEC   (0.001)   // sample test interval for the first timer
 #define TEST_WITHOUT_RELOAD   0        // testing will be done without auto reload
 #define TEST_WITH_RELOAD      1        // testing will be done with auto reload
 #define TEST_CONTINUOUS       2
