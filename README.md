@@ -1,7 +1,7 @@
 # vibration
 Vibration stimulation and response analyser
 
-Produces a mechanical vibration stimulus and records the response at a nearby point on the same structure. It's intended for modal analysis of built structures (for the purpose of designing vibration control mechanisms), and is WiFi-enabled to make it flexible in its use.
+Produces a mechanical vibration stimulus and records the response at a nearby point on the structure. It's intended for modal analysis of built structures (for the purpose of designing vibration suppression mechanisms), and is WiFi-enabled to make it as flexible as possible in its use.
 
 Features of version 1.0:
 - Controlled by a HTML interface
@@ -13,4 +13,4 @@ Features of version 1.0:
   - ADXL355: Expensive (>$35!) but superb noise performance: 25 ug/rtHz. Best source at the moment seems to be direct from Analog.com, hopefully will become more mainstream soon.
 - ESP32 hardware
 
-Would like in future to support analogue accelerometers, particularly ADXL354, and piezoelectrics transducers.
+Would like in future to support analogue accelerometers, particularly ADXL354, and piezoelectrics transducers, and to enable Ethernet communications.
