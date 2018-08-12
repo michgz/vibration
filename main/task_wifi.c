@@ -36,6 +36,9 @@ const static int CONNECTED_BIT = BIT0;
 const static char *TAG = "TASK_WIFI";
 
 
+
+static OPERATION_t oper = (OPERATION_t){18.5,-22.0,0.,0.,0};
+
 static void openssl_example_task(void *p)
 {
     int ret;
@@ -158,7 +161,7 @@ reconnect:
             ESP_LOGI(TAG, "SSL get matched message");
             ESP_LOGI(TAG, "SSL write message");
             
-            create_web_page(send_data, 1024, NULL);
+            create_web_page(send_data, 1024, &oper);
             
             send_bytes = strlen(send_data);
             
@@ -175,8 +178,6 @@ reconnect:
         }
         else if (strstr(recv_buf, "POST ") &&
             strstr(recv_buf, " HTTP/1.1")) {
-            
-            OPERATION_t oper;
             
             oper.result = 0;  // initialised to failed
             

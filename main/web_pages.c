@@ -20,7 +20,16 @@ const static char *TAG = "WEB_PAGES";
                           "Content-Length: "   // .. and then fill in the length value
 
 
-static int create_web_page_html(char *, int, int *);
+
+
+#define OPERATION_DEFAULT (OPERATION_t){18.5,-22.0,18.5,-22.0,0}
+
+
+const OPERATION_t oper_default = OPERATION_DEFAULT;
+
+
+
+static int create_web_page_html(char *, int, int *, OPERATION_t *);
 
 
 const char http_head[] = HTTP_HEAD_INITIAL;
@@ -34,8 +43,42 @@ int create_web_page(char * buff, int max_buff_size, OPERATION_t * op)
     // 
     int offset = max_buff_size / 2;
 
+    if (op == NULL)
+    {
+        op = &oper_default;
+    }
+    else
+    {
+        if (op->freq_requested < 1.0)
+        {
+            op->freq_used = 1.0;
+        }
+        else if (op->freq_requested > 60.0)
+        {
+            op->freq_used = 60.0;
+        }
+        else
+        {
+            op->freq_used = op->freq_requested;
+        }
+        
+        if (op->ampl_requested < -60.0)
+        {
+            op->ampl_used = -60.0;
+        }
+        else if (op->ampl_requested > -20.0)
+        {
+            op->ampl_used = -20.0;
+        }
+        else
+        {
+            op->ampl_used = op->ampl_requested;
+        }
+
+    }
+
     int content_len = 0;
-    int html_size = create_web_page_html(&buff[offset], max_buff_size - offset, &content_len);
+    int html_size = create_web_page_html(&buff[offset], max_buff_size - offset, &content_len, op);
 
     char * buff_2 = buff;
 
@@ -45,8 +88,6 @@ int create_web_page(char * buff, int max_buff_size, OPERATION_t * op)
     buff_2 += strlen(buff_2);
 
     memmove(buff_2, &buff[offset], strlen(&buff[offset]));
-    
-    (void) op;
     
     return 1;
 }
@@ -69,10 +110,14 @@ int create_web_page(char * buff, int max_buff_size, OPERATION_t * op)
 const char html_page[] = HTML_PAGE;
 
 
-static int create_web_page_html(char * buff, int max_size, int * content_length)
+static int create_web_page_html(char * buff, int max_size, int * content_length, OPERATION_t * op)
 {
+    if (op == NULL)
+    {
+        return 0;
+    }
     int line_count = 12;
-    sprintf(buff, html_page, 18.5f, -22.0f);
+    sprintf(buff, html_page, op->freq_used, op->ampl_used);
     if (content_length != NULL)
     {
         // Content-Length uses a weird scheme, which is total number of bytes, counting
