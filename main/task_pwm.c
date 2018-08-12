@@ -241,9 +241,8 @@ static void do_a_pwm_operation(PWM_OPERATION_t *arg)
         currentAmpl = pow10f(arg->ampl / 20.0);  // dB to linear conversion
         currentFreq = arg->freq;
     }
-    
-    printf("Ampl = %f, Freq = %f\n", currentAmpl, currentFreq);
 
+    ESP_LOGI(TAG, "Vibration with frequency %f Hz, amplitude %f", currentFreq, currentAmpl);
 
     while (x < MAX_Y) {
         timer_event_t evt;
