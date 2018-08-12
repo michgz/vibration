@@ -5,6 +5,8 @@
 
 #include "sdkconfig.h"
 
+#include "esp_spiffs.h"
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -51,6 +53,8 @@
 #define NACK_VAL                           0x1              /*!< I2C nack value */
 
 const static char *TAG = "TASK_SENSOR";
+
+static void example_tg1_timer_deinit(int timer_idx);
 
 
 /* Write a value into a register.   */
@@ -192,6 +196,83 @@ static float adxl_decode_reading(uint8_t raw_data[3])
 }
 
 
+typedef struct {
+    int index;
+    float x, y, z;
+    
+} READING_t ;
+
+typedef struct {
+    float freq;
+    float ampl;
+    
+    READING_t read [500];
+
+} FILE_STRUCT_t;
+
+
+
+static FILE_STRUCT_t   theFile;
+
+
+
+static int write_into_a_file(int max_i, FILE_STRUCT_t * f_in)
+{
+
+    ESP_LOGI(TAG, "Initializing SPIFFS");
+    
+    esp_vfs_spiffs_conf_t conf = {
+      .base_path = "/spiffs",
+      .partition_label = NULL,
+      .max_files = 5,
+      .format_if_mount_failed = true
+    };
+    
+    // Use settings defined above to initialize and mount SPIFFS filesystem.
+    // Note: esp_vfs_spiffs_register is an all-in-one convenience function.
+    esp_err_t ret = esp_vfs_spiffs_register(&conf);
+
+    if (ret != ESP_OK) {
+        if (ret == ESP_FAIL) {
+            ESP_LOGE(TAG, "Failed to mount or format filesystem");
+        } else if (ret == ESP_ERR_NOT_FOUND) {
+            ESP_LOGE(TAG, "Failed to find SPIFFS partition");
+        } else {
+            ESP_LOGE(TAG, "Failed to initialize SPIFFS (%s)", esp_err_to_name(ret));
+        }
+        return;
+    }
+    
+    size_t total = 0, used = 0;
+    ret = esp_spiffs_info(NULL, &total, &used);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s)", esp_err_to_name(ret));
+    } else {
+        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
+    }
+
+    // Create a file.
+    ESP_LOGI(TAG, "Opening file");
+    {
+    char c[24];
+    sprintf(c, "/spiffs/%04d", max_i + 1);
+    FILE* f = fopen(c, "w");
+    if (f == NULL) {
+        ESP_LOGE(TAG, "Failed to open file for writing");
+        return;
+    }
+    fwrite(f_in, sizeof(FILE_STRUCT_t)/sizeof(float), sizeof(float), f);
+    fclose(f);
+    }
+    ESP_LOGI(TAG, "File written");
+
+
+    // All done, unmount partition and disable SPIFFS
+    esp_vfs_spiffs_unregister(NULL);
+    ESP_LOGI(TAG, "SPIFFS unmounted");
+
+}
+
 static void i2c_test_task(void* arg)
 {
     int ret;
@@ -217,6 +298,9 @@ static void i2c_test_task(void* arg)
 
             (void) i2c_adxl_write_single_register(I2C_MASTER_NUM, ADXL355_CMD_POWER_CTL, 2);  // Start measuring
 
+            theFile.freq = 1.0;
+            theFile.ampl = 0.0;
+
             while(count_readings<500)
             {
 
@@ -239,6 +323,12 @@ static void i2c_test_task(void* arg)
                         (void) i2c_adxl_read_multiple(I2C_MASTER_NUM, ADXL355_CMD_XDATA3, readings, 9);
 
                         //ESP_LOGI(TAG, "Reading: %0.6f, %0.6f, %0.6f", adxl_decode_reading(&readings[0]), adxl_decode_reading(&readings[3]), adxl_decode_reading(&readings[6]));
+                        
+                        theFile.read[count_readings].index = count_readings;
+                        theFile.read[count_readings].x = adxl_decode_reading(&readings[0]);
+                        theFile.read[count_readings].y = adxl_decode_reading(&readings[3]);
+                        theFile.read[count_readings].z = adxl_decode_reading(&readings[6]);
+                                                
                         count_readings ++;
 
                         //(void) i2c_adxl_read_single_register(I2C_MASTER_NUM, ADXL355_CMD_STATUS, &status_byte);
@@ -251,12 +341,17 @@ static void i2c_test_task(void* arg)
 
             (void) i2c_adxl_write_single_register(I2C_MASTER_NUM, ADXL355_CMD_POWER_CTL, 3);  // Stop measuring
 
+            // Now write into the file
+            (void) write_into_a_file(1, &theFile);
+
         }
         else
         {
             ESP_LOGI(TAG, "Not recognised as any known accelerometer");
         }
     }
+
+    example_tg1_timer_deinit(TIMER_0);
 
     vTaskDelete(NULL);
 
@@ -353,7 +448,10 @@ static void example_tg1_timer_init(int timer_idx,
     timer_start(TIMER_GROUP_1, timer_idx);
 }
 
-
+static void example_tg1_timer_deinit(int timer_idx)
+{
+    timer_pause(TIMER_GROUP_1, timer_idx);
+}
 
 void app_main_task_sensor()
 {

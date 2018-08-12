@@ -31,6 +31,7 @@
 #include "soc/mcpwm_struct.h"
 
 #include "task_wifi.h"
+#include "task_sensor.h"
 
 const static char *TAG = "TASK_PWM";
 

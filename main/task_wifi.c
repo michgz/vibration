@@ -24,6 +24,7 @@
 #include "lwip/netdb.h"
 
 #include "task_pwm.h"
+#include "task_sensor.h"
 #include "web_pages.h"
 
 static EventGroupHandle_t wifi_event_group;
@@ -38,6 +39,18 @@ const static char *TAG = "TASK_WIFI";
 
 
 static OPERATION_t oper = (OPERATION_t){18.5,-22.0,0.,0.,0};
+
+
+/* Is a character a decimal digit??  */
+static bool isDigit(char c)
+{
+    return ((c >= '0') && (c <= '9'));
+}
+
+static int digitVal(char c)
+{
+    return ((int)c) - (int)'0';
+}
 
 static void openssl_example_task(void *p)
 {
@@ -158,21 +171,57 @@ reconnect:
         ESP_LOGI(TAG, "SSL read: %s", recv_buf);
         if (strstr(recv_buf, "GET ") &&
             strstr(recv_buf, " HTTP/1.1")) {
-            ESP_LOGI(TAG, "SSL get matched message");
-            ESP_LOGI(TAG, "SSL write message");
             
-            create_web_page(send_data, 1024, &oper);
+            char * getpos = strstr(recv_buf, "GET ");  // we already know this is non-null...
             
-            send_bytes = strlen(send_data);
+            if (   (getpos[4] == '/')
+                 && isDigit(getpos[5]) && isDigit(getpos[6])
+                 && isDigit(getpos[7]) && isDigit(getpos[8]) )
+            {
             
-            ESP_LOGI(TAG, "Send data len = %d", send_bytes);
-            ESP_LOGI(TAG, "Send data: %s", send_data);
+                // The remote browser is trying to "get" a four-digit number
+
+                int pageNumber = 1000*digitVal(getpos[5]) + 100*digitVal(getpos[6]) + 10*digitVal(getpos[7]) + 1*digitVal(getpos[8]);
+
+                ESP_LOGI(TAG, "SSL get 4-digit message");
+                ESP_LOGI(TAG, "SSL write message");
+                
+                create_web_page_file(send_data, 1024, pageNumber);
+                
+                send_bytes = strlen(send_data);
+                
+                ESP_LOGI(TAG, "Send data len = %d", send_bytes);
+                ESP_LOGI(TAG, "Send data: %s", send_data);
+                
+                ret = SSL_write(ssl, send_data, send_bytes);
+                if (ret > 0) {
+                    ESP_LOGI(TAG, "OK");
+                } else {
+                    ESP_LOGI(TAG, "error");
+                }
             
-            ret = SSL_write(ssl, send_data, send_bytes);
-            if (ret > 0) {
-                ESP_LOGI(TAG, "OK");
-            } else {
-                ESP_LOGI(TAG, "error");
+            }
+            else
+            {
+                // Assume the remote browser has requested "/" (i.e. the root page)
+
+
+                ESP_LOGI(TAG, "SSL get matched message");
+                ESP_LOGI(TAG, "SSL write message");
+                
+                create_web_page(send_data, 1024, &oper);
+                
+                send_bytes = strlen(send_data);
+                
+                ESP_LOGI(TAG, "Send data len = %d", send_bytes);
+                ESP_LOGI(TAG, "Send data: %s", send_data);
+                
+                ret = SSL_write(ssl, send_data, send_bytes);
+                if (ret > 0) {
+                    ESP_LOGI(TAG, "OK");
+                } else {
+                    ESP_LOGI(TAG, "error");
+                }
             }
             break;
         }
@@ -195,6 +244,7 @@ reconnect:
                 
                 prepare_operation(&oper);
 
+                app_main_task_sensor();
                 app_main_do_pwm(&oper);
             }
             ESP_LOGI(TAG, "SSL write message");
