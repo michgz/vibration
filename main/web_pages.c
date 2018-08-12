@@ -2,7 +2,8 @@
 
 #include <string.h>
 #include <stdio.h>
-
+#include "web_pages.h"
+#include "main.h"
 
 /* Creates web pages to send     */
 
@@ -24,7 +25,7 @@ static int create_web_page_html(char *, int, int *);
 
 const char http_head[] = HTTP_HEAD_INITIAL;
 
-int create_web_page(char * buff, int max_buff_size)
+int create_web_page(char * buff, int max_buff_size, OPERATION_t * op)
 {
     // To avoid too much moving stuff around, create the HTML portion of the page
     //  in the top half of the buffer.
@@ -45,6 +46,8 @@ int create_web_page(char * buff, int max_buff_size)
 
     memmove(buff_2, &buff[offset], strlen(&buff[offset]));
     
+    (void) op;
+    
     return 1;
 }
 
@@ -53,8 +56,8 @@ int create_web_page(char * buff, int max_buff_size)
                         "<head>\r\n" \
                         "<title>Assistant</title></head><body>\r\n" \
                         "<form action=\"#\" method=\"post\">\r\n" \
-                        " Frequency: <input type=\"text\" name=\"freq\" value=\"18.5\"> Hz<br>\r\n" \
-                        " Amplitude: <input type=\"text\" name=\"ampl\" value=\"-22.0\"> dB<br>\r\n" \
+                        " Frequency: <input type=\"text\" name=\"freq\" value=\"%0.1f\"> Hz<br>\r\n" \
+                        " Amplitude: <input type=\"text\" name=\"ampl\" value=\"%0.1f\"> dB<br>\r\n" \
                         "<input type=\"submit\" value=\"Submit\">\r\n" \
                         "</form>\r\n" \
                         "<a href=\"/0001\">0001</a>\r\n" \
@@ -69,14 +72,14 @@ const char html_page[] = HTML_PAGE;
 static int create_web_page_html(char * buff, int max_size, int * content_length)
 {
     int line_count = 12;
-    memcpy(buff, html_page, strlen(html_page));
+    sprintf(buff, html_page, 18.5f, -22.0f);
     if (content_length != NULL)
     {
         // Content-Length uses a weird scheme, which is total number of bytes, counting
         // each "\r\n" pair as a single byte, and ignoring the final "\r\n". That's based
         // on Espressif's example. It's possible their example is just wrong..
-        *content_length = strlen(html_page) - line_count - 1;
+        *content_length = strlen(buff) - line_count - 1;
     }
-    return strlen(html_page);
+    return strlen(buff);
 }
 

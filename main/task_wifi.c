@@ -158,7 +158,7 @@ reconnect:
             ESP_LOGI(TAG, "SSL get matched message");
             ESP_LOGI(TAG, "SSL write message");
             
-            create_web_page(send_data, 1024);
+            create_web_page(send_data, 1024, NULL);
             
             send_bytes = strlen(send_data);
             
@@ -175,6 +175,11 @@ reconnect:
         }
         else if (strstr(recv_buf, "POST ") &&
             strstr(recv_buf, " HTTP/1.1")) {
+            
+            OPERATION_t oper;
+            
+            oper.result = 0;  // initialised to failed
+            
             char * i1 = strstr(recv_buf, "freq=");
             char * i2 = strstr(recv_buf, "ampl=");
             if (i1 && i2)
@@ -183,12 +188,15 @@ reconnect:
                 sscanf(&i1[5], "%f", &ff);
                 sscanf(&i2[5], "%f", &aa);
                 ESP_LOGI(TAG, "%0.6f  ::  %0.6f", ff, aa);
+                
+                oper.freq_requested = ff;
+                oper.ampl_requested = aa;
 
-                //app_main_do_pwm();
+                //app_main_do_pwm(&oper);
             }
             ESP_LOGI(TAG, "SSL write message");
 
-            create_web_page(send_data, 1024);
+            create_web_page(send_data, 1024, &oper);
             
             send_bytes = strlen(send_data);
             

@@ -20,4 +20,17 @@
 
 #define OPENSSL_EXAMPLE_LOCAL_TCP_PORT     443
 
+typedef struct {
+
+    float freq_requested;   // Units Hz
+    float ampl_requested;   // Units dB
+    float freq_used;        // Units Hz
+    float ampl_used;        // Units dB
+    
+    int   result;    // 0 = fail, 1 = success
+
+
+} OPERATION_t ;
+
+
 #endif  //_MAIN_H_
