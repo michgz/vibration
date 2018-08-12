@@ -1,6 +1,8 @@
 #include "task_pwm.h"
 #include "main.h"
 
+#include <math.h>
+
 
 #include <stdio.h>
 #include <string.h>
@@ -49,6 +51,11 @@ const int FlashFromRtos = 0;
 #define TEST_WITHOUT_RELOAD   0        // testing will be done without auto reload
 #define TEST_WITH_RELOAD      1        // testing will be done with auto reload
 #define TEST_CONTINUOUS       2
+
+
+
+static void mcpwm_example_config(void);
+
 
 
 float GetDuty(int y, float ampl, float freq_hz)
@@ -204,16 +211,39 @@ static void inline print_timer_counter(uint64_t counter_value)
     printf("Time   : %.8f s\n", (double) counter_value / TIMER_SCALE);
 }
 
+typedef struct {
+    float freq;
+    float ampl;
+} PWM_OPERATION_t;
+
+static PWM_OPERATION_t pwmOp;
+
 /*
  * The main task of the timer group
  */
-static void timer_example_evt_task(void *arg)
+static void do_a_pwm_operation(PWM_OPERATION_t *arg)
 {
     static float dutyToSet = 0.0;
 
     static int x = 0;
 
     x = 0;
+
+    float currentAmpl, currentFreq;
+    
+    if (arg == NULL)
+    {
+        currentAmpl = 1.000;
+        currentFreq = 1.0;
+    }
+    else
+    {
+        currentAmpl = pow10f(arg->ampl / 20.0);  // dB to linear conversion
+        currentFreq = arg->freq;
+    }
+    
+    printf("Ampl = %f, Freq = %f\n", currentAmpl, currentFreq);
+
 
     while (x < MAX_Y) {
         timer_event_t evt;
@@ -247,16 +277,14 @@ static void timer_example_evt_task(void *arg)
             x += 1;
 
             // Calculate the duty for the next go-around
-            dutyToSet = GetDuty(x, 1.000 /*amplitude */,  1.0  /*frequency Hz  */   ) * TukeyWindow(x);
+            dutyToSet = GetDuty(x, currentAmpl, currentFreq  ) * TukeyWindow(x);
 
         }
     }
 
-    vTaskDelete(NULL);
-
 }
 
-void blink_task(void *pvParameter)
+void pwm_task(void *pvParameter)
 {
     /* Configure the IOMUX register for pad BLINK_GPIO (some pads are
        muxed to GPIO on reset already, but some default to other
@@ -264,29 +292,25 @@ void blink_task(void *pvParameter)
        Technical Reference for a list of pads and their default
        functions.)
     */
-    while(1) {
-        if (FlashFromRtos == 1) {
-            /* Blink off (output low) */
-            mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 10.0);
-        }
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        if (FlashFromRtos == 1) {
-            /* Blink on (output high) */
-            mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 35.0);
-        }
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    
+    mcpwm_example_config();
+    
+    do {
 
         example_tg0_timer_init(TIMER_0, TEST_CONTINUOUS,  0);
         example_tg0_timer_init(TIMER_1, TEST_WITH_RELOAD, TIMER_INTERVAL0_SEC);
 
-        xTaskCreate(timer_example_evt_task, "timer_evt_task", 2048, NULL, 5, NULL);
+        do_a_pwm_operation((PWM_OPERATION_t *) pvParameter);
 
-        vTaskDelay(20000 / portTICK_PERIOD_MS);  //  Must be longer than the task we created!!
+        vTaskDelay(500 / portTICK_PERIOD_MS);
 
         example_tg0_timer_deinit(TIMER_0);
         example_tg0_timer_deinit(TIMER_1);
 
-    }
+    } while(0);
+
+    vTaskDelete(NULL);
+
 }
 
 #define GPIO_PWM0A_OUT 23
@@ -303,7 +327,7 @@ static void mcpwm_example_gpio_initialize()
 /**
  * @brief Configure whole MCPWM module
  */
-static void mcpwm_example_config(void *arg)
+static void mcpwm_example_config(void)
 {
     //1. mcpwm gpio initialization
     mcpwm_example_gpio_initialize();
@@ -317,20 +341,60 @@ static void mcpwm_example_config(void *arg)
     pwm_config.counter_mode = MCPWM_UP_DOWN_COUNTER;
     pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
     mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);   //Configure PWM0A & PWM0B with above settings
-
-    vTaskDelete(NULL);
-
 }
 
 
-void app_main_do_pwm(void)
+void app_main_do_pwm(OPERATION_t * op)
 {
     ESP_LOGI(TAG, "Entering PWM task...");
 
+    if (op != NULL)
+    {
+        pwmOp.freq = op->freq_used;
+        pwmOp.ampl = op->ampl_used;
+    }
+
     timer_queue = xQueueCreate(10, sizeof(timer_event_t));
 
-    xTaskCreate(mcpwm_example_config, "mcpwm_example_config", 4096, NULL, 5, NULL);
-    xTaskCreate(&blink_task, "blink_task", configMINIMAL_STACK_SIZE, NULL, 4, NULL);
+    xTaskCreate(&pwm_task, "pwm_task", 2048, &pwmOp, 5, NULL);
 
-    /* At this point, will enter a low-priority idle task ...   */
+}
+
+void prepare_operation(OPERATION_t * op)
+{
+    if (op == NULL)
+    {
+        // BAD
+    }
+    else
+    {
+        if (op->freq_requested < 1.0)
+        {
+            op->freq_used = 1.0;
+        }
+        else if (op->freq_requested > 60.0)
+        {
+            op->freq_used = 60.0;
+        }
+        else
+        {
+            op->freq_used = op->freq_requested;
+        }
+        
+        if (op->ampl_requested < -60.0)
+        {
+            op->ampl_used = -60.0;
+        }
+        else if (op->ampl_requested > -20.0)
+        {
+            op->ampl_used = -20.0;
+        }
+        else
+        {
+            op->ampl_used = op->ampl_requested;
+        }
+
+    }
+
+
 }

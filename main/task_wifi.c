@@ -192,8 +192,10 @@ reconnect:
                 
                 oper.freq_requested = ff;
                 oper.ampl_requested = aa;
+                
+                prepare_operation(&oper);
 
-                //app_main_do_pwm(&oper);
+                app_main_do_pwm(&oper);
             }
             ESP_LOGI(TAG, "SSL write message");
 
