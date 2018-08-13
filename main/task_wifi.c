@@ -25,6 +25,7 @@
 
 #include "task_pwm.h"
 #include "task_sensor.h"
+#include "file_manager.h"
 #include "web_pages.h"
 
 static EventGroupHandle_t wifi_event_group;
@@ -254,7 +255,7 @@ reconnect:
             }
             else if (i3)
             {
-                ; // Must do the deletion
+                fm_delete_all_files(); // Must do the deletion
             }
             else if (i1 && i2)
             {
