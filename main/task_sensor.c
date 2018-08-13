@@ -18,6 +18,7 @@
 
 #include "driver/i2c.h"
 #include "task_sensor.h"
+#include "file_manager.h"
 
 /**
  *
@@ -216,7 +217,7 @@ static FILE_STRUCT_t   theFile;
 
 
 
-static int write_into_a_file(int max_i, FILE_STRUCT_t * f_in)
+static int write_into_a_file(int number_to_write, FILE_STRUCT_t * f_in)
 {
 
     ESP_LOGI(TAG, "Initializing SPIFFS");
@@ -255,7 +256,7 @@ static int write_into_a_file(int max_i, FILE_STRUCT_t * f_in)
     ESP_LOGI(TAG, "Opening file");
     {
     char c[24];
-    sprintf(c, "/spiffs/%04d", max_i + 1);
+    sprintf(c, "/spiffs/%04d", number_to_write);
     FILE* f = fopen(c, "w");
     if (f == NULL) {
         ESP_LOGE(TAG, "Failed to open file for writing");
@@ -342,7 +343,9 @@ static void i2c_test_task(void* arg)
             (void) i2c_adxl_write_single_register(I2C_MASTER_NUM, ADXL355_CMD_POWER_CTL, 3);  // Stop measuring
 
             // Now write into the file
-            (void) write_into_a_file(1, &theFile);
+            (void) write_into_a_file(fm_get_largest_file_number() + 1, &theFile);
+            
+            fm_add_file();
 
         }
         else
