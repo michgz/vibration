@@ -31,7 +31,7 @@ const OPERATION_t oper_default = OPERATION_DEFAULT;
 
 static int create_web_page_html(char *, int, int *, OPERATION_t *);
 static int create_web_page_html_file(char *, int, int *, int);
-
+static int create_web_page_html_delete_all(char * buff, int max_size, int * content_length);
 
 const char http_head[] = HTTP_HEAD_INITIAL;
 
@@ -97,12 +97,13 @@ int create_web_page(char * buff, int max_buff_size, OPERATION_t * op)
 #define HTML_PAGE       "<html>\r\n" \
                         "<head>\r\n" \
                         "<title>Assistant</title></head><body>\r\n" \
-                        "<form action=\"#\" method=\"post\">\r\n" \
+                        "<menu><form action=\"#\" method=\"post\">\r\n" \
                         " Frequency: <input type=\"text\" name=\"freq\" value=\"%0.1f\"> Hz<br>\r\n" \
                         " Amplitude: <input type=\"text\" name=\"ampl\" value=\"%0.1f\"> dB<br>\r\n" \
                         "<input type=\"submit\" value=\"Submit\">\r\n" \
-                        "</form>\r\n" \
-                        "<a href=\"/0001\">0001</a>\r\n" \
+                        "</form></menu>\r\n" \
+                        "<p><a href=\"/0001\">0001</a></p>\r\n" \
+                        "<p><a href=\"delete_all\">Delete all</a></p>\r\n" \
                         "</body>\r\n" \
                         "</html>\r\n" \
                         "\r\n"
@@ -117,7 +118,7 @@ static int create_web_page_html(char * buff, int max_size, int * content_length,
     {
         return 0;
     }
-    int line_count = 12;
+    int line_count = 13;
     sprintf(buff, html_page, op->freq_used, op->ampl_used);
     if (content_length != NULL)
     {
@@ -169,6 +170,61 @@ static int create_web_page_html_file(char * buff, int max_size, int * content_le
 {
     int line_count = 8;
     sprintf(buff, html_page_f1, pageNum);
+    if (content_length != NULL)
+    {
+        // Content-Length uses a weird scheme, which is total number of bytes, counting
+        // each "\r\n" pair as a single byte, and ignoring the final "\r\n". That's based
+        // on Espressif's example. It's possible their example is just wrong..
+        *content_length = strlen(buff) - line_count - 1;
+    }
+    return strlen(buff);
+}
+
+
+int create_web_page_delete_all(char * buff, int max_buff_size)
+{
+    int offset = max_buff_size / 2;
+    
+    int content_len = 0;
+    int html_size = create_web_page_html_delete_all(&buff[offset], max_buff_size - offset, &content_len);
+
+    char * buff_2 = buff;
+
+    memcpy(buff_2, http_head, strlen(http_head));
+    buff_2 += (sizeof(http_head) - 1);  //  why the "-1"??
+    sprintf (buff_2, "%d\r\n\r\n", content_len);
+    buff_2 += strlen(buff_2);
+
+    memmove(buff_2, &buff[offset], strlen(&buff[offset]));
+    
+    return 1;
+
+
+}
+
+
+
+
+#define HTML_PAGE_DEL   "<html>\r\n" \
+                        "<head>\r\n" \
+                        "<title>Delete All!</title></head><body>\r\n" \
+                        "<form action = \"../\" method = \"post\">\r\n" \
+                        "This will delete all stored data on the remote device. Are you sure you wish to proceed?<br>\r\n" \
+                        "<input type=\"submit\" name=\"proceed\" value=\"Proceed\" />\r\n" \
+                        "<input type=\"submit\" name=\"cancel\" value=\"Cancel\" />\r\n" \
+                        "</form>\r\n" \
+                        "</body>\r\n" \
+                        "</html>\r\n" \
+                        "\r\n"
+
+
+const char html_page_del[] = HTML_PAGE_DEL;
+
+
+static int create_web_page_html_delete_all(char * buff, int max_size, int * content_length)
+{
+    int line_count = 11;
+    strcpy(buff, html_page_del);
     if (content_length != NULL)
     {
         // Content-Length uses a weird scheme, which is total number of bytes, counting

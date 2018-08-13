@@ -5,5 +5,6 @@
 
 extern int create_web_page(char * buff, int max_buff_size, OPERATION_t *);
 extern int create_web_page_file(char * buff, int max_buff_size, int);
+extern int create_web_page_delete_all(char *, int);
 
 #endif // WEB_PAGES_H_

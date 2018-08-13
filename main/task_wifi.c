@@ -174,7 +174,20 @@ reconnect:
             
             char * getpos = strstr(recv_buf, "GET ");  // we already know this is non-null...
             
-            if (   (getpos[4] == '/')
+            
+            if (0 == memcmp(&getpos[4], "/delete_all", 11))
+            {
+                ESP_LOGI(TAG, "Sending delete all page");
+                create_web_page_delete_all(send_data, 1024);
+                
+                send_bytes = strlen(send_data);
+                
+                ret = SSL_write(ssl, send_data, send_bytes);
+                
+                (void) ret;
+                                
+            }
+            else if (   (getpos[4] == '/')
                  && isDigit(getpos[5]) && isDigit(getpos[6])
                  && isDigit(getpos[7]) && isDigit(getpos[8]) )
             {
@@ -232,7 +245,18 @@ reconnect:
             
             char * i1 = strstr(recv_buf, "freq=");
             char * i2 = strstr(recv_buf, "ampl=");
-            if (i1 && i2)
+            char * i3 = strstr(recv_buf, "proceed=Proceed");  // The "Proceed" button was pressed on the Delete All page
+            char * i4 = strstr(recv_buf, "cancel=Cancel");    // The "Cancel" button was pressed on the Delete All page
+            
+            if (i4)
+            {
+                ;  // Do nothing -- the operation was cancelled
+            }
+            else if (i3)
+            {
+                ; // Must do the deletion
+            }
+            else if (i1 && i2)
             {
                 float ff,aa;
                 sscanf(&i1[5], "%f", &ff);
