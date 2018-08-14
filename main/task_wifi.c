@@ -10,8 +10,6 @@
 #include "esp_err.h"
 #include "esp_log.h"
 
-#include "openssl/ssl.h"
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -20,6 +18,7 @@
 #include "esp_wifi.h"
 #include "esp_event_loop.h"
 
+#include "lwip/api.h"
 #include "lwip/sockets.h"
 #include "lwip/netdb.h"
 
@@ -41,6 +40,7 @@ const static char *TAG = "TASK_WIFI";
 
 static OPERATION_t oper = (OPERATION_t){18.5,-22.0,0.,0.,0};
 
+#define HTTP_PORT  80   // or 8080.....
 
 /* Is a character a decimal digit??  */
 static bool isDigit(char c)
@@ -57,119 +57,77 @@ static void openssl_example_task(void *p)
 {
     int ret;
 
-    SSL_CTX *ctx;
-    SSL *ssl;
-
-    int sockfd, new_sockfd;
-    socklen_t addr_len;
-    struct sockaddr_in sock_addr;
+    struct netconn * nc1;
+    struct netconn * nc2;
 
     char recv_buf[OPENSSL_EXAMPLE_RECV_BUF_LEN];
 
-    extern const unsigned char cacert_pem_start[] asm("_binary_cacert_pem_start");
-    extern const unsigned char cacert_pem_end[]   asm("_binary_cacert_pem_end");
-    const unsigned int cacert_pem_bytes = cacert_pem_end - cacert_pem_start;
+    ESP_LOGI(TAG, "HTTP server netconn create ......");
 
-    extern const unsigned char prvtkey_pem_start[] asm("_binary_prvtkey_pem_start");
-    extern const unsigned char prvtkey_pem_end[]   asm("_binary_prvtkey_pem_end");
-    const unsigned int prvtkey_pem_bytes = prvtkey_pem_end - prvtkey_pem_start;   
-
-    ESP_LOGI(TAG, "SSL server context create ......");
-    /* For security reasons, it is best if you can use
-       TLSv1_2_server_method() here instead of TLS_server_method().
-       However some old browsers may not support TLS v1.2.
-    */
-    ctx = SSL_CTX_new(TLS_server_method());
-    if (!ctx) {
+    nc1 = netconn_new(NETCONN_TCP);
+    if (!nc1) {
         ESP_LOGI(TAG, "failed");
         goto failed1;
     }
     ESP_LOGI(TAG, "OK");
 
-    ESP_LOGI(TAG, "SSL server context set own certification......");
-    ret = SSL_CTX_use_certificate_ASN1(ctx, cacert_pem_bytes, cacert_pem_start);
-    if (!ret) {
+    ESP_LOGI(TAG, "HHTP server bind to a port......");
+    ret = netconn_bind(nc1, IP_ADDR_ANY, HTTP_PORT);
+    if (!!ret) {
         ESP_LOGI(TAG, "failed");
         goto failed2;
     }
     ESP_LOGI(TAG, "OK");
 
-    ESP_LOGI(TAG, "SSL server context set private key......");
-    ret = SSL_CTX_use_PrivateKey_ASN1(0, ctx, prvtkey_pem_start, prvtkey_pem_bytes);
-    if (!ret) {
+    ESP_LOGI(TAG, "HTTP server listen at the port......");
+    ret = netconn_listen(nc1);
+    if (!!ret) {
         ESP_LOGI(TAG, "failed");
         goto failed2;
-    }
-    ESP_LOGI(TAG, "OK");
-
-    ESP_LOGI(TAG, "SSL server create socket ......");
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) {
-        ESP_LOGI(TAG, "failed");
-        goto failed2;
-    }
-    ESP_LOGI(TAG, "OK");
-
-    ESP_LOGI(TAG, "SSL server socket bind ......");
-    memset(&sock_addr, 0, sizeof(sock_addr));
-    sock_addr.sin_family = AF_INET;
-    sock_addr.sin_addr.s_addr = 0;
-    sock_addr.sin_port = htons(OPENSSL_EXAMPLE_LOCAL_TCP_PORT);
-    ret = bind(sockfd, (struct sockaddr*)&sock_addr, sizeof(sock_addr));
-    if (ret) {
-        ESP_LOGI(TAG, "failed");
-        goto failed3;
-    }
-    ESP_LOGI(TAG, "OK");
-
-    ESP_LOGI(TAG, "SSL server socket listen ......");
-    ret = listen(sockfd, 32);
-    if (ret) {
-        ESP_LOGI(TAG, "failed");
-        goto failed3;
     }
     ESP_LOGI(TAG, "OK");
 
 reconnect:
-    ESP_LOGI(TAG, "SSL server create ......");
-    ssl = SSL_new(ctx);
-    if (!ssl) {
+    ESP_LOGI(TAG, "HTTP server wait for incoming connection......");
+    ret = netconn_accept(nc1, &nc2);
+    if (!!ret) {
         ESP_LOGI(TAG, "failed");
-        goto failed3;
-    }
-    ESP_LOGI(TAG, "OK");
-
-    ESP_LOGI(TAG, "SSL server socket accept client ......");
-    new_sockfd = accept(sockfd, (struct sockaddr *)&sock_addr, &addr_len);
-    if (new_sockfd < 0) {
-        ESP_LOGI(TAG, "failed" );
         goto failed4;
     }
-    ESP_LOGI(TAG, "OK");
-
-    SSL_set_fd(ssl, new_sockfd);
-
-    ESP_LOGI(TAG, "SSL server accept client ......");
-    ret = SSL_accept(ssl);
-    if (!ret) {
+    if (!nc2) {
         ESP_LOGI(TAG, "failed");
-        goto failed5;
-    }
+        goto failed4;
+    } 
     ESP_LOGI(TAG, "OK");
 
-    ESP_LOGI(TAG, "SSL server read message ......");
+    ESP_LOGI(TAG, "HTTP server read message ......");
     do {
+        struct netbuf * nb1 = NULL;
         memset(recv_buf, 0, OPENSSL_EXAMPLE_RECV_BUF_LEN);
-        ret = SSL_read(ssl, recv_buf, OPENSSL_EXAMPLE_RECV_BUF_LEN - 1);
-        if (ret <= 0) {
+        ret = netconn_recv(nc2, &nb1);
+        if (!!ret || !nb1) {
             break;
         }
+        
+        int recv_buf_len = 0;
+        
+        recv_buf_len = netbuf_len(nb1);
+        if (recv_buf_len > OPENSSL_EXAMPLE_RECV_BUF_LEN - 1)
+        {
+            recv_buf_len = OPENSSL_EXAMPLE_RECV_BUF_LEN - 1;
+        }
+        
+        recv_buf_len = netbuf_copy(nb1, recv_buf, recv_buf_len);
+        
+        netbuf_delete(nb1);
+        nb1 = NULL;
+        
         
         static char send_data [1024];
         static int send_bytes = 0;
         
-        
-        ESP_LOGI(TAG, "SSL read: %s", recv_buf);
+        ESP_LOGI(TAG, "HTTP received %d bytes", recv_buf_len);
+        ESP_LOGI(TAG, "HTTP read: %s", recv_buf);
         if (strstr(recv_buf, "GET ") &&
             strstr(recv_buf, " HTTP/1.1")) {
             
@@ -183,7 +141,7 @@ reconnect:
                 
                 send_bytes = strlen(send_data);
                 
-                ret = SSL_write(ssl, send_data, send_bytes);
+                ret = netconn_write(nc2, send_data, send_bytes, NETCONN_COPY);
                 
                 (void) ret;
                                 
@@ -207,7 +165,7 @@ reconnect:
                 ESP_LOGI(TAG, "Send data len = %d", send_bytes);
                 ESP_LOGI(TAG, "Send data: %s", send_data);
                 
-                ret = SSL_write(ssl, send_data, send_bytes);
+                ret = netconn_write(nc2, send_data, send_bytes, NETCONN_COPY);
                 if (ret > 0) {
                     ESP_LOGI(TAG, "OK");
                 } else {
@@ -230,7 +188,7 @@ reconnect:
                 ESP_LOGI(TAG, "Send data len = %d", send_bytes);
                 ESP_LOGI(TAG, "Send data: %s", send_data);
                 
-                ret = SSL_write(ssl, send_data, send_bytes);
+                ret = netconn_write(nc2, send_data, send_bytes, NETCONN_COPY);
                 if (ret > 0) {
                     ESP_LOGI(TAG, "OK");
                 } else {
@@ -281,7 +239,7 @@ reconnect:
             ESP_LOGI(TAG, "Send data len = %d", send_bytes);
             ESP_LOGI(TAG, "Send data: %s", send_data);
             
-            ret = SSL_write(ssl, send_data, send_bytes);
+            ret = netconn_write(nc2, send_data, send_bytes, NETCONN_COPY);
             if (ret > 0) {
                 ESP_LOGI(TAG, "OK");
             } else {
@@ -291,20 +249,18 @@ reconnect:
         }
     } while (1);
     
-    SSL_shutdown(ssl);
-failed5:
-    close(new_sockfd);
-    new_sockfd = -1;
+    ESP_LOGI(TAG, "Broken out of loop");
+    vTaskDelay( 3000 / portTICK_PERIOD_MS);
+    
+    netconn_delete(nc2);
+    nc2 = NULL;
+// failed 5 not needed ....
 failed4:
-    SSL_free(ssl);
-    ssl = NULL;
     goto reconnect;
-failed3:
-    close(sockfd);
-    sockfd = -1;
+// failed 3 not needed..
 failed2:
-    SSL_CTX_free(ctx);
-    ctx = NULL;
+    (void) netconn_delete(nc1);
+    nc1 = NULL;
 failed1:
     vTaskDelete(NULL);
     return ;
