@@ -155,8 +155,8 @@ reconnect:
 
                 int pageNumber = 1000*digitVal(getpos[5]) + 100*digitVal(getpos[6]) + 10*digitVal(getpos[7]) + 1*digitVal(getpos[8]);
 
-                ESP_LOGI(TAG, "SSL get 4-digit message");
-                ESP_LOGI(TAG, "SSL write message");
+                ESP_LOGI(TAG, "HTTP get 4-digit message");
+                ESP_LOGI(TAG, "HTTP write message");
                 
                 create_web_page_file(send_data, 1024, pageNumber);
                 
@@ -166,7 +166,7 @@ reconnect:
                 ESP_LOGI(TAG, "Send data: %s", send_data);
                 
                 ret = netconn_write(nc2, send_data, send_bytes, NETCONN_COPY);
-                if (ret > 0) {
+                if (!ret) {
                     ESP_LOGI(TAG, "OK");
                 } else {
                     ESP_LOGI(TAG, "error");
@@ -178,8 +178,8 @@ reconnect:
                 // Assume the remote browser has requested "/" (i.e. the root page)
 
 
-                ESP_LOGI(TAG, "SSL get matched message");
-                ESP_LOGI(TAG, "SSL write message");
+                ESP_LOGI(TAG, "HTTP get matched message");
+                ESP_LOGI(TAG, "HTTP write message");
                 
                 create_web_page(send_data, 1024, &oper);
                 
@@ -189,7 +189,7 @@ reconnect:
                 ESP_LOGI(TAG, "Send data: %s", send_data);
                 
                 ret = netconn_write(nc2, send_data, send_bytes, NETCONN_COPY);
-                if (ret > 0) {
+                if (!ret) {
                     ESP_LOGI(TAG, "OK");
                 } else {
                     ESP_LOGI(TAG, "error");
@@ -230,7 +230,7 @@ reconnect:
                 app_main_task_sensor();
                 app_main_do_pwm(&oper);
             }
-            ESP_LOGI(TAG, "SSL write message");
+            ESP_LOGI(TAG, "HTTP write message");
 
             create_web_page(send_data, 1024, &oper);
             
@@ -240,7 +240,7 @@ reconnect:
             ESP_LOGI(TAG, "Send data: %s", send_data);
             
             ret = netconn_write(nc2, send_data, send_bytes, NETCONN_COPY);
-            if (ret > 0) {
+            if (!ret) {
                 ESP_LOGI(TAG, "OK");
             } else {
                 ESP_LOGI(TAG, "error");
@@ -248,10 +248,7 @@ reconnect:
             break;
         }
     } while (1);
-    
-    ESP_LOGI(TAG, "Broken out of loop");
-    vTaskDelay( 3000 / portTICK_PERIOD_MS);
-    
+
     netconn_delete(nc2);
     nc2 = NULL;
 // failed 5 not needed ....
