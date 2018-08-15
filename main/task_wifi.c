@@ -53,6 +53,8 @@ static int digitVal(char c)
     return ((int)c) - (int)'0';
 }
 
+static int process_received_buf(char * in_buf, int in_len, char * out_buf, int * out_len);
+
 static void openssl_example_task(void *p)
 {
     int ret;
@@ -127,116 +129,12 @@ reconnect:
         
         ESP_LOGI(TAG, "HTTP received %d bytes", recv_buf_len);
         ESP_LOGI(TAG, "HTTP read: %s", recv_buf);
-        if (strstr(recv_buf, "GET ") &&
-            strstr(recv_buf, " HTTP/1.1")) {
-            
-            char * getpos = strstr(recv_buf, "GET ");  // we already know this is non-null...
-            
-            
-            if (0 == memcmp(&getpos[4], "/delete_all", 11))
-            {
-                ESP_LOGI(TAG, "Sending delete all page");
-                create_web_page_delete_all(send_data, 1024);
-                
-                send_bytes = strlen(send_data);
-                
-                ret = netconn_write(nc2, send_data, send_bytes, NETCONN_COPY);
-                
-                (void) ret;
-                                
-            }
-            else if (   (getpos[4] == '/')
-                 && isDigit(getpos[5]) && isDigit(getpos[6])
-                 && isDigit(getpos[7]) && isDigit(getpos[8]) )
-            {
-            
-                // The remote browser is trying to "get" a four-digit number
-
-                int pageNumber = 1000*digitVal(getpos[5]) + 100*digitVal(getpos[6]) + 10*digitVal(getpos[7]) + 1*digitVal(getpos[8]);
-
-                ESP_LOGI(TAG, "HTTP get 4-digit message");
-                ESP_LOGI(TAG, "HTTP write message");
-                
-                create_web_page_file(send_data, 1024, pageNumber);
-                
-                send_bytes = strlen(send_data);
-                
-                ESP_LOGI(TAG, "Send data len = %d", send_bytes);
-                ESP_LOGI(TAG, "Send data: %s", send_data);
-                
-                ret = netconn_write(nc2, send_data, send_bytes, NETCONN_COPY);
-                if (!ret) {
-                    ESP_LOGI(TAG, "OK");
-                } else {
-                    ESP_LOGI(TAG, "error");
-                }
-            
-            }
-            else
-            {
-                // Assume the remote browser has requested "/" (i.e. the root page)
-
-
-                ESP_LOGI(TAG, "HTTP get matched message");
-                ESP_LOGI(TAG, "HTTP write message");
-                
-                create_web_page(send_data, 2048, &oper);
-
-                ESP_LOGI(TAG, "Created page");
-                
-                send_bytes = strlen(send_data);
-                
-                ESP_LOGI(TAG, "Send data len = %d", send_bytes);
-                ESP_LOGI(TAG, "Send data: %s", send_data);
-                
-                ret = netconn_write(nc2, send_data, send_bytes, NETCONN_COPY);
-                if (!ret) {
-                    ESP_LOGI(TAG, "OK");
-                } else {
-                    ESP_LOGI(TAG, "error");
-                }
-            }
-            break;
-        }
-        else if (strstr(recv_buf, "POST ") &&
-            strstr(recv_buf, " HTTP/1.1")) {
-            
-            oper.result = 0;  // initialised to failed
-            
-            char * i1 = strstr(recv_buf, "freq=");
-            char * i2 = strstr(recv_buf, "ampl=");
-            char * i3 = strstr(recv_buf, "proceed=Proceed");  // The "Proceed" button was pressed on the Delete All page
-            char * i4 = strstr(recv_buf, "cancel=Cancel");    // The "Cancel" button was pressed on the Delete All page
-            
-            if (i4)
-            {
-                ;  // Do nothing -- the operation was cancelled
-            }
-            else if (i3)
-            {
-                fm_delete_all_files(); // Must do the deletion
-            }
-            else if (i1 && i2)
-            {
-                float ff,aa;
-                sscanf(&i1[5], "%f", &ff);
-                sscanf(&i2[5], "%f", &aa);
-                ESP_LOGI(TAG, "%0.6f  ::  %0.6f", ff, aa);
-                
-                oper.freq_requested = ff;
-                oper.ampl_requested = aa;
-                
-                prepare_operation(&oper);
-
-                app_main_task_sensor();
-                app_main_do_pwm(&oper);
-            }
-            ESP_LOGI(TAG, "HTTP write message");
-
-            create_web_page(send_data, 1024, &oper);
-            
-            send_bytes = strlen(send_data);
-            
+        
+        send_bytes = 2048;  // initialise to maximum
+        int val = process_received_buf(recv_buf, recv_buf_len, send_data, &send_bytes);
+        
+        if (val != 0)
+        {
             ESP_LOGI(TAG, "Send data len = %d", send_bytes);
             ESP_LOGI(TAG, "Send data: %s", send_data);
             
@@ -246,8 +144,12 @@ reconnect:
             } else {
                 ESP_LOGI(TAG, "error");
             }
-            break;
         }
+        
+        
+        break;  // Is this needed? Under what circumstances??
+        
+
     } while (1);
 
     (void) netconn_close(nc2);
@@ -324,3 +226,103 @@ void wifi_conn_init(void)
     ESP_LOGI(TAG, "start the WIFI SSID:[%s] password:[...]\n", EXAMPLE_WIFI_SSID);
     ESP_ERROR_CHECK( esp_wifi_start() );
 }
+
+
+
+ 
+static int process_received_buf(char * in_buf, int in_len, char * out_buf, int * out_len)
+{
+    if (!in_buf || !out_buf || !out_len)
+    {
+        return 0;    
+    }
+
+
+    if (strstr(in_buf, "GET ") &&
+        strstr(in_buf, " HTTP/1.1")) {
+        
+        char * getpos = strstr(in_buf, "GET ");  // we already know this is non-null...
+        
+        
+        if (0 == memcmp(&getpos[4], "/delete_all", 11))
+        {
+            ESP_LOGI(TAG, "Sending delete all page");
+            create_web_page_delete_all(out_buf, *out_len);
+            
+            *out_len = strlen(out_buf);
+        }
+        else if (   (getpos[4] == '/')
+             && isDigit(getpos[5]) && isDigit(getpos[6])
+             && isDigit(getpos[7]) && isDigit(getpos[8]) )
+        {
+        
+            // The remote browser is trying to "get" a four-digit number
+
+            int pageNumber = 1000*digitVal(getpos[5]) + 100*digitVal(getpos[6]) + 10*digitVal(getpos[7]) + 1*digitVal(getpos[8]);
+
+            ESP_LOGI(TAG, "HTTP get 4-digit message");
+            ESP_LOGI(TAG, "HTTP write message");
+
+            create_web_page_file(out_buf, *out_len, pageNumber);
+
+            *out_len = strlen(out_buf);
+        }
+        else
+        {
+            // Assume the remote browser has requested "/" (i.e. the root page)
+
+
+            ESP_LOGI(TAG, "HTTP get matched message");
+            ESP_LOGI(TAG, "HTTP write message");
+
+            create_web_page(out_buf, *out_len, &oper);
+
+            ESP_LOGI(TAG, "Created page");
+
+            *out_len = strlen(out_buf);
+        }
+    }
+    else if (strstr(in_buf, "POST ") &&
+        strstr(in_buf, " HTTP/1.1")) {
+
+        oper.result = 0;  // initialised to failed
+
+        char * i1 = strstr(in_buf, "freq=");
+        char * i2 = strstr(in_buf, "ampl=");
+        char * i3 = strstr(in_buf, "proceed=Proceed");  // The "Proceed" button was pressed on the Delete All page
+        char * i4 = strstr(in_buf, "cancel=Cancel");    // The "Cancel" button was pressed on the Delete All page
+
+        if (i4)
+        {
+            ;  // Do nothing -- the operation was cancelled
+        }
+        else if (i3)
+        {
+            fm_delete_all_files(); // Must do the deletion
+        }
+        else if (i1 && i2)
+        {
+            float ff,aa;
+            sscanf(&i1[5], "%f", &ff);
+            sscanf(&i2[5], "%f", &aa);
+            ESP_LOGI(TAG, "%0.6f  ::  %0.6f", ff, aa);
+
+            oper.freq_requested = ff;
+            oper.ampl_requested = aa;
+
+            prepare_operation(&oper);
+
+            app_main_task_sensor();
+            app_main_do_pwm(&oper);
+        }
+        ESP_LOGI(TAG, "HTTP write message");
+
+        create_web_page(out_buf, *out_len, &oper);
+
+        *out_len = strlen(out_buf);
+    }
+
+
+    return 1;
+}
+
