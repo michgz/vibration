@@ -63,7 +63,6 @@ static void openssl_example_task(void *p)
     char recv_buf[OPENSSL_EXAMPLE_RECV_BUF_LEN];
 
     ESP_LOGI(TAG, "HTTP server netconn create ......");
-
     nc1 = netconn_new(NETCONN_TCP);
     if (!nc1) {
         ESP_LOGI(TAG, "failed");
@@ -79,6 +78,7 @@ static void openssl_example_task(void *p)
     }
     ESP_LOGI(TAG, "OK");
 
+reconnect:
     ESP_LOGI(TAG, "HTTP server listen at the port......");
     ret = netconn_listen(nc1);
     if (!!ret) {
@@ -87,7 +87,6 @@ static void openssl_example_task(void *p)
     }
     ESP_LOGI(TAG, "OK");
 
-reconnect:
     ESP_LOGI(TAG, "HTTP server wait for incoming connection......");
     ret = netconn_accept(nc1, &nc2);
     if (!!ret) {
@@ -97,7 +96,7 @@ reconnect:
     if (!nc2) {
         ESP_LOGI(TAG, "failed");
         goto failed4;
-    } 
+    }
     ESP_LOGI(TAG, "OK");
 
     ESP_LOGI(TAG, "HTTP server read message ......");
@@ -121,9 +120,9 @@ reconnect:
         
         netbuf_delete(nb1);
         nb1 = NULL;
+
         
-        
-        static char send_data [1024];
+        static char send_data [2048];
         static int send_bytes = 0;
         
         ESP_LOGI(TAG, "HTTP received %d bytes", recv_buf_len);
@@ -181,7 +180,9 @@ reconnect:
                 ESP_LOGI(TAG, "HTTP get matched message");
                 ESP_LOGI(TAG, "HTTP write message");
                 
-                create_web_page(send_data, 1024, &oper);
+                create_web_page(send_data, 2048, &oper);
+
+                ESP_LOGI(TAG, "Created page");
                 
                 send_bytes = strlen(send_data);
                 
@@ -248,6 +249,8 @@ reconnect:
             break;
         }
     } while (1);
+
+    (void) netconn_close(nc2);
 
     netconn_delete(nc2);
     nc2 = NULL;
