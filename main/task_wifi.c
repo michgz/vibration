@@ -265,9 +265,8 @@ static int process_received_buf(char * in_buf, int in_len, char * out_buf, int *
             ESP_LOGI(TAG, "HTTP get 4-digit message");
             ESP_LOGI(TAG, "HTTP write message");
 
-            create_web_page_file(out_buf, *out_len, pageNumber);
+            ret = create_web_page_file(out_buf, out_len, pageNumber);
 
-            *out_len = strlen(out_buf);
         }
         else if (   (getpos[4] == '/') && (getpos[5] == ' ')  )
         {
@@ -277,9 +276,7 @@ static int process_received_buf(char * in_buf, int in_len, char * out_buf, int *
             ESP_LOGI(TAG, "HTTP get matched message");
             ESP_LOGI(TAG, "HTTP write message");
 
-            create_web_page(out_buf, out_len, &oper);
-
-            ESP_LOGI(TAG, "Created page");
+            ret = create_web_page(out_buf, out_len, &oper);
 
         }
         else
@@ -290,10 +287,6 @@ static int process_received_buf(char * in_buf, int in_len, char * out_buf, int *
             ESP_LOGI(TAG, "HTTP write message");
 
             create_web_page_404(out_buf, out_len);
-
-            ESP_LOGI(TAG, "Created page");
-
-            *out_len = strlen(out_buf);
         
         }
     }

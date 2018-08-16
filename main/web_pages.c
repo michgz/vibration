@@ -21,51 +21,15 @@ const static char *TAG = "WEB_PAGES";
 static int add_http_header_response(char * buf, int * buf_len);
 
 
-
-#define HTTP_HEAD_INITIAL "HTTP/1.1 200 OK\r\n" \
-                          "Content-Type: text/html\r\n" \
-                          "Content-Length: "   // .. and then fill in the length value
-
-
-const char http_head[] = HTTP_HEAD_INITIAL;
-
 #define OPERATION_DEFAULT (OPERATION_t){18.5,-22.0,18.5,-22.0,0}
 
 
 const OPERATION_t oper_default = OPERATION_DEFAULT;
 
-static int add_on_head(char * buf_to, int * buf_to_len, char * buf_from, int buf_from_len)
-{
-    if (!buf_to || !buf_to_len || !buf_from)
-    {
-        return 0;
-    }
-
-    if (strlen(http_head) + 6 + 4 + buf_from_len > *buf_to_len)
-    {
-        // Not enough space. Leave 6 characters for the decimal length (probably more than enough!)
-        return 0;
-    }
-
-    char * buff_current;
-
-    strcpy(buf_to, http_head);
-    
-    buff_current = buf_to + strlen(buf_to);
-    sprintf(buff_current, "%d\r\n\r\n", buf_from_len);
-    buff_current = buff_current + strlen(buff_current);
-    
-    memcpy(buff_current, buf_from, buf_from_len);
-    
-    *buf_to_len = (buff_current - buf_to) + buf_from_len;
-    buf_to[*buf_to_len] = '\0';   // make sure is null-terminated.
-
-    return 1;
-}
 
 static int create_web_page_html(char *, int *, OPERATION_t *);
-static int create_web_page_html_file(char *, int, int *, int);
-static int create_web_page_html_delete_all(char * buff, int max_size);
+static int create_web_page_html_file(char *, int *, int);
+static int create_web_page_html_delete_all(char * buff, int *buff_size);
 
 
 
@@ -213,24 +177,23 @@ static int create_web_page_html(char * buff, int * buff_size, OPERATION_t * op)
 }
 
 
-int create_web_page_file(char * buff, int max_buff_size, int pageNum)
+int create_web_page_file(char * buff, int * buff_size, int pageNum)
 {
-    int offset = max_buff_size / 2;
-    
-    int content_len = 0;
-    int html_size = create_web_page_html_file(&buff[offset], max_buff_size - offset, &content_len, pageNum);
+    int ret = 1;
 
-    char * buff_2 = buff;
+    if (!buff || !buff_size)
+    {
+        return 0;
+    }
 
-    memcpy(buff_2, http_head, strlen(http_head));
-    buff_2 += (sizeof(http_head) - 1);  //  why the "-1"??
-    sprintf (buff_2, "%d\r\n\r\n", content_len);
-    buff_2 += strlen(buff_2);
+    ret = create_web_page_html_file(buff, buff_size, pageNum);
 
-    memmove(buff_2, &buff[offset], strlen(&buff[offset]));
-    
-    return 1;
+    if (ret)
+    {
+        ret = add_http_header_response(buff, buff_size);
+    }
 
+    return ret;
 
 }
 
@@ -248,30 +211,28 @@ int create_web_page_file(char * buff, int max_buff_size, int pageNum)
 const char html_page_f1[] = HTML_PAGE_F1;
 
 
-static int create_web_page_html_file(char * buff, int max_size, int * content_length, int pageNum)
+static int create_web_page_html_file(char * buff, int * buff_size, int pageNum)
 {
-    int line_count = 8;
-    sprintf(buff, html_page_f1, pageNum);
-    if (content_length != NULL)
+    if (*buff_size < strlen(html_page_f1))
     {
-        // Content-Length uses a weird scheme, which is total number of bytes, counting
-        // each "\r\n" pair as a single byte, and ignoring the final "\r\n". That's based
-        // on Espressif's example. It's possible their example is just wrong..
-        *content_length = strlen(buff) - line_count - 1;
+        return 0;
     }
-    return strlen(buff);
+    
+    sprintf(buff, html_page_f1, pageNum);
+
+    return 1;
 }
 
 
-int create_web_page_delete_all(char * buff, int *  buff_size)
+int create_web_page_delete_all(char * buff, int * buff_size)
 {
     if (!buff || ! buff_size)
     {
         return 0;
     }
 
-    int ret = create_web_page_html_delete_all(buff, *buff_size);
-    
+    int ret = create_web_page_html_delete_all(buff, buff_size);
+
     if (ret)
     {
         ret = add_http_header_response(buff, buff_size);
@@ -300,9 +261,9 @@ int create_web_page_delete_all(char * buff, int *  buff_size)
 const char html_page_del[] = HTML_PAGE_DEL;
 
 
-static int create_web_page_html_delete_all(char * buff, int max_size)
+static int create_web_page_html_delete_all(char * buff, int * buff_size)
 {
-    if (max_size <= strlen(html_page_del))
+    if (*buff_size <= strlen(html_page_del))
     {
         return 0;
     }
@@ -340,7 +301,7 @@ static int add_http_header_response(char * buf, int * buf_len)
     {
         return 0;
     }
-    
+
     char the_len [12];
     
     int current_len = strlen(buf);  // *buf_len is the _maximum_ length, not the current.
