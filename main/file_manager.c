@@ -10,16 +10,40 @@
 #include "esp_spiffs.h"
 #include "nvs_flash.h"
 
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "freertos/queue.h"
+#include "freertos/event_groups.h"
+
 const static char *TAG = "FILE_MANAGER";
 
 static int theCurrentFileNumber = 0;   // Largest number of files in the directory. 0 means no files.
 
 
 
+/*
+ * The main task of the delete operation
+ */
+static void del_task(void *pvParameter)
+{
+    esp_spiffs_format(NULL);  // format the default partition
+    
+    xSemaphoreGive((SemaphoreHandle_t) pvParameter);
+
+    vTaskDelete(NULL);
+}
+
+
 
 void fm_delete_all_files(void)
 {
-    esp_spiffs_format(NULL);  // format the default partition
+    SemaphoreHandle_t sem_1 = xSemaphoreCreateBinary();
+    
+    xTaskCreate(&del_task, "del_task", 2048, (void *) sem_1, 5, NULL);
+    
+    (void) xSemaphoreTake(sem_1, portMAX_DELAY);  // wait for the new task to complete.
     
     theCurrentFileNumber = 0;
 }
