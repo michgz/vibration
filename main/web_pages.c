@@ -63,21 +63,19 @@ static int add_on_head(char * buf_to, int * buf_to_len, char * buf_from, int buf
     return 1;
 }
 
-static int create_web_page_html(char *, int, int *, OPERATION_t *);
+static int create_web_page_html(char *, int *, OPERATION_t *);
 static int create_web_page_html_file(char *, int, int *, int);
 static int create_web_page_html_delete_all(char * buff, int max_size);
 
 
 
-int create_web_page(char * buff, int max_buff_size, OPERATION_t * op)
+int create_web_page(char * buff, int *buff_size, OPERATION_t * op)
 {
-    // To avoid too much moving stuff around, create the HTML portion of the page
-    //  in the top half of the buffer.
-    //
-    // Need to add quite a lot of checking to that.
-    // 
-    int offset = max_buff_size / 2;
-
+    if (!buff || ! buff_size)
+    {
+        return 0;
+    }
+    
     if (op == NULL)
     {
         op = &oper_default;
@@ -112,19 +110,15 @@ int create_web_page(char * buff, int max_buff_size, OPERATION_t * op)
 
     }
 
-    int content_len = 0;
-    int html_size = create_web_page_html(&buff[offset], max_buff_size - offset, &content_len, op);
-
-    char * buff_2 = buff;
-
-    memcpy(buff_2, http_head, strlen(http_head));
-    buff_2 += (sizeof(http_head) - 1);  //  why the "-1"??
-    sprintf (buff_2, "%d\r\n\r\n", content_len);
-    buff_2 += strlen(buff_2);
-
-    memmove(buff_2, &buff[offset], strlen(&buff[offset]));
+    int ret = create_web_page_html(buff, buff_size, op);
     
-    return 1;
+    if (ret)
+    {
+        ret = add_http_header_response(buff, buff_size);
+    }
+
+    return ret;
+
 }
 
 
@@ -152,7 +146,7 @@ const char html_page_2[] = HTML_PAGE_2;
 const char html_page_3[] = HTML_PAGE_3;
 
 
-static int create_web_page_html(char * buff, int max_size, int * content_length, OPERATION_t * op)
+static int create_web_page_html(char * buff, int * buff_size, OPERATION_t * op)
 {
     if (op == NULL)
     {
@@ -160,9 +154,21 @@ static int create_web_page_html(char * buff, int max_size, int * content_length,
     }
     int line_count = 12;
     
-    char * buff_2;
-    
-    sprintf(buff, html_page_1, op->freq_used, op->ampl_used);
+    char * buff_2 = buff;
+    int size_remaining = * buff_size;
+
+    if (size_remaining < strlen(html_page_1))  // Not precisely correct, because of the floating-points substitutions. Close enough tho ...
+    {
+        return 0;
+    }
+
+    sprintf(buff_2, html_page_1, op->freq_used, op->ampl_used);
+    size_remaining -= strlen(buff_2);
+    if (size_remaining <= 0)
+    {
+        return 0;
+    }
+    buff_2 += strlen(buff_2);
     
     
     int max_i = fm_get_largest_file_number();
@@ -171,28 +177,39 @@ static int create_web_page_html(char * buff, int max_size, int * content_length,
     
     for (i = 1; i <= max_i; i ++)
     {
-    
-        buff_2 = buff + strlen(buff) - 0;
+        if (size_remaining < strlen(html_page_2))
+        {
+            return 0;
+        }
     
         sprintf(buff_2, html_page_2, i, i);
         
         line_count ++;
-    
+
+        size_remaining -= strlen(buff_2);
+        if (size_remaining <= 0)
+        {
+            return 0;
+        }
+        buff_2 += strlen(buff_2);
+
     }
     
-    buff_2 = buff + strlen(buff) - 0;
-    
-    strcpy(buff_2, html_page_3);
-    
-    
-    if (content_length != NULL)
+    if (size_remaining < strlen(html_page_2))
     {
-        // Content-Length uses a weird scheme, which is total number of bytes, counting
-        // each "\r\n" pair as a single byte, and ignoring the final "\r\n". That's based
-        // on Espressif's example. It's possible their example is just wrong..
-        *content_length = strlen(buff) - line_count - 1;
+        return 0;
     }
-    return strlen(buff);
+
+    strcpy(buff_2, html_page_3);
+
+    size_remaining -= strlen(buff_2);
+    if (size_remaining <= 0)
+    {
+        return 0;
+    }
+    buff_2 += strlen(buff_2);
+        
+    return 1;
 }
 
 
@@ -345,7 +362,7 @@ static int add_http_header_response(char * buf, int * buf_len)
 
     *buf_len = (current_len + strlen(http_head_1) + strlen(http_head_2) + len_of_the_len);
 
-    memmove(buf + (strlen(http_head_1) + strlen(http_head_2) + len_of_the_len), buf, current_len);
+    memmove(buf + (strlen(http_head_1) + strlen(http_head_2) + len_of_the_len), buf, current_len +1); // +1 to get the null termination
     
     memmove(buf + (0),                                    http_head_1, strlen(http_head_1));
     memmove(buf + (strlen(http_head_1)),                  the_len    , len_of_the_len);

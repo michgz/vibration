@@ -277,11 +277,10 @@ static int process_received_buf(char * in_buf, int in_len, char * out_buf, int *
             ESP_LOGI(TAG, "HTTP get matched message");
             ESP_LOGI(TAG, "HTTP write message");
 
-            create_web_page(out_buf, *out_len, &oper);
+            create_web_page(out_buf, out_len, &oper);
 
             ESP_LOGI(TAG, "Created page");
 
-            *out_len = strlen(out_buf);
         }
         else
         {
@@ -333,12 +332,10 @@ static int process_received_buf(char * in_buf, int in_len, char * out_buf, int *
         }
         ESP_LOGI(TAG, "HTTP write message");
 
-        create_web_page(out_buf, *out_len, &oper);
-
-        *out_len = strlen(out_buf);
+        ret = create_web_page(out_buf, out_len, &oper);
     }
 
 
-    return 1;
+    return ret;
 }
 
