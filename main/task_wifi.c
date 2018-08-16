@@ -232,6 +232,8 @@ void wifi_conn_init(void)
  
 static int process_received_buf(char * in_buf, int in_len, char * out_buf, int * out_len)
 {
+    int ret = 1;
+
     if (!in_buf || !out_buf || !out_len)
     {
         return 0;    
@@ -247,9 +249,9 @@ static int process_received_buf(char * in_buf, int in_len, char * out_buf, int *
         if (0 == memcmp(&getpos[4], "/delete_all", 11))
         {
             ESP_LOGI(TAG, "Sending delete all page");
-            create_web_page_delete_all(out_buf, *out_len);
-            
-            *out_len = strlen(out_buf);
+
+            ret = create_web_page_delete_all(out_buf, out_len);
+
         }
         else if (   (getpos[4] == '/')
              && isDigit(getpos[5]) && isDigit(getpos[6])
@@ -267,9 +269,9 @@ static int process_received_buf(char * in_buf, int in_len, char * out_buf, int *
 
             *out_len = strlen(out_buf);
         }
-        else
+        else if (   (getpos[4] == '/') && (getpos[5] == ' ')  )
         {
-            // Assume the remote browser has requested "/" (i.e. the root page)
+            // The remote browser has requested "/" (i.e. the root page)
 
 
             ESP_LOGI(TAG, "HTTP get matched message");
@@ -280,6 +282,20 @@ static int process_received_buf(char * in_buf, int in_len, char * out_buf, int *
             ESP_LOGI(TAG, "Created page");
 
             *out_len = strlen(out_buf);
+        }
+        else
+        {
+            // 404: file not found
+            
+            ESP_LOGI(TAG, "Not found");
+            ESP_LOGI(TAG, "HTTP write message");
+
+            create_web_page_404(out_buf, out_len);
+
+            ESP_LOGI(TAG, "Created page");
+
+            *out_len = strlen(out_buf);
+        
         }
     }
     else if (strstr(in_buf, "POST ") &&

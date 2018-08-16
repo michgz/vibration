@@ -17,25 +17,57 @@
 const static char *TAG = "WEB_PAGES";
 
 
+
+static int add_http_header_response(char * buf, int * buf_len);
+
+
+
 #define HTTP_HEAD_INITIAL "HTTP/1.1 200 OK\r\n" \
                           "Content-Type: text/html\r\n" \
                           "Content-Length: "   // .. and then fill in the length value
 
 
-
+const char http_head[] = HTTP_HEAD_INITIAL;
 
 #define OPERATION_DEFAULT (OPERATION_t){18.5,-22.0,18.5,-22.0,0}
 
 
 const OPERATION_t oper_default = OPERATION_DEFAULT;
 
+static int add_on_head(char * buf_to, int * buf_to_len, char * buf_from, int buf_from_len)
+{
+    if (!buf_to || !buf_to_len || !buf_from)
+    {
+        return 0;
+    }
 
+    if (strlen(http_head) + 6 + 4 + buf_from_len > *buf_to_len)
+    {
+        // Not enough space. Leave 6 characters for the decimal length (probably more than enough!)
+        return 0;
+    }
+
+    char * buff_current;
+
+    strcpy(buf_to, http_head);
+    
+    buff_current = buf_to + strlen(buf_to);
+    sprintf(buff_current, "%d\r\n\r\n", buf_from_len);
+    buff_current = buff_current + strlen(buff_current);
+    
+    memcpy(buff_current, buf_from, buf_from_len);
+    
+    *buf_to_len = (buff_current - buf_to) + buf_from_len;
+    buf_to[*buf_to_len] = '\0';   // make sure is null-terminated.
+
+    return 1;
+}
 
 static int create_web_page_html(char *, int, int *, OPERATION_t *);
 static int create_web_page_html_file(char *, int, int *, int);
-static int create_web_page_html_delete_all(char * buff, int max_size, int * content_length);
+static int create_web_page_html_delete_all(char * buff, int max_size);
 
-const char http_head[] = HTTP_HEAD_INITIAL;
+
 
 int create_web_page(char * buff, int max_buff_size, OPERATION_t * op)
 {
@@ -214,24 +246,21 @@ static int create_web_page_html_file(char * buff, int max_size, int * content_le
 }
 
 
-int create_web_page_delete_all(char * buff, int max_buff_size)
+int create_web_page_delete_all(char * buff, int *  buff_size)
 {
-    int offset = max_buff_size / 2;
+    if (!buff || ! buff_size)
+    {
+        return 0;
+    }
+
+    int ret = create_web_page_html_delete_all(buff, *buff_size);
     
-    int content_len = 0;
-    int html_size = create_web_page_html_delete_all(&buff[offset], max_buff_size - offset, &content_len);
+    if (ret)
+    {
+        ret = add_http_header_response(buff, buff_size);
+    }
 
-    char * buff_2 = buff;
-
-    memcpy(buff_2, http_head, strlen(http_head));
-    buff_2 += (sizeof(http_head) - 1);  //  why the "-1"??
-    sprintf (buff_2, "%d\r\n\r\n", content_len);
-    buff_2 += strlen(buff_2);
-
-    memmove(buff_2, &buff[offset], strlen(&buff[offset]));
-    
-    return 1;
-
+    return ret;
 
 }
 
@@ -254,16 +283,126 @@ int create_web_page_delete_all(char * buff, int max_buff_size)
 const char html_page_del[] = HTML_PAGE_DEL;
 
 
-static int create_web_page_html_delete_all(char * buff, int max_size, int * content_length)
+static int create_web_page_html_delete_all(char * buff, int max_size)
 {
-    int line_count = 11;
-    strcpy(buff, html_page_del);
-    if (content_length != NULL)
+    if (max_size <= strlen(html_page_del))
     {
-        // Content-Length uses a weird scheme, which is total number of bytes, counting
-        // each "\r\n" pair as a single byte, and ignoring the final "\r\n". That's based
-        // on Espressif's example. It's possible their example is just wrong..
-        *content_length = strlen(buff) - line_count - 1;
+        return 0;
     }
-    return strlen(buff);
+
+    strcpy(buff, html_page_del);
+
+    return 1;
+    
 }
+
+
+
+
+/* -------------------------------------------------------------------------- **
+ *  ------------           200: OK response         --------------------------**
+ * */
+ 
+ 
+ 
+#define HTTP_HEAD_1       "HTTP/1.1 200 OK\r\n" \
+                          "Content-Type: text/html\r\n" \
+                          "Content-Length: "
+                          
+// .. then the length value
+
+#define HTTP_HEAD_2       "\r\n\r\n";
+
+const char http_head_1 [] = HTTP_HEAD_1;
+const char http_head_2 [] = HTTP_HEAD_2;
+
+// Adds a "200 OK" response header.
+static int add_http_header_response(char * buf, int * buf_len)
+{
+    if (!buf || !buf_len)
+    {
+        return 0;
+    }
+    
+    char the_len [12];
+    
+    int current_len = strlen(buf);  // *buf_len is the _maximum_ length, not the current.
+    
+    if (current_len > 999999)
+    {
+        // Too ridiculous! Bail out
+        return 0;
+    }
+    
+    sprintf(the_len, "%d", current_len);
+    
+    int len_of_the_len = strlen(the_len);
+    
+    if ((current_len + strlen(http_head_1) + strlen(http_head_2) + len_of_the_len) >= *buf_len)
+    {
+        return 0;
+    }
+
+    *buf_len = (current_len + strlen(http_head_1) + strlen(http_head_2) + len_of_the_len);
+
+    memmove(buf + (strlen(http_head_1) + strlen(http_head_2) + len_of_the_len), buf, current_len);
+    
+    memmove(buf + (0),                                    http_head_1, strlen(http_head_1));
+    memmove(buf + (strlen(http_head_1)),                  the_len    , len_of_the_len);
+    memmove(buf + (strlen(http_head_1) + len_of_the_len), http_head_2, strlen(http_head_2));
+
+    return 1;
+}
+
+
+
+
+
+
+
+
+/* -------------------------------------------------------------------------- **
+ *  ------------       404: NOT FOUND response      --------------------------**
+ * */
+
+
+#define HTTP_HEAD_404     "HTTP/1.1 404 Not Found\r\n" \
+                          "Content-Type: text/html\r\n" \
+                          "Content-Length: 0\r\n\r\n"
+                          
+const char http_head_404 [] = HTTP_HEAD_404;
+
+int create_web_page_404(char * out_buf, int * out_buf_len)
+{
+    if (! out_buf || ! out_buf_len)
+    {
+        return 0;
+    }    
+
+    if (*out_buf_len < strlen(http_head_404))
+    {
+        return 0;
+    }
+    
+    strcpy(out_buf, http_head_404);
+    * out_buf_len = strlen(http_head_404);
+    
+    return 1;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
