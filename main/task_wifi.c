@@ -24,6 +24,7 @@
 
 #include "task_pwm.h"
 #include "task_sensor.h"
+#include "task_sntp.h"
 #include "file_manager.h"
 #include "web_pages.h"
 
@@ -168,17 +169,17 @@ failed1:
     return ;
 } 
 
-static void openssl_server_init(void)
+static void http_server_init(void)
 {
     int ret;
-    xTaskHandle openssl_handle;
+    xTaskHandle http_handle;
 
     ret = xTaskCreate(openssl_example_task,
                       OPENSSL_EXAMPLE_TASK_NAME,
                       OPENSSL_EXAMPLE_TASK_STACK_WORDS,
                       NULL,
                       OPENSSL_EXAMPLE_TASK_PRIORITY,
-                      &openssl_handle); 
+                      &http_handle); 
 
     if (ret != pdPASS)  {
         ESP_LOGI(TAG, "create task %s failed", OPENSSL_EXAMPLE_TASK_NAME);
@@ -193,7 +194,8 @@ static esp_err_t wifi_event_handler(void *ctx, system_event_t *event)
         break;
     case SYSTEM_EVENT_STA_GOT_IP:
         xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
-        openssl_server_init();
+        do_sntp_task();
+        http_server_init();
         break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
         /* This is a workaround as ESP32 WiFi libs don't currently
@@ -306,7 +308,9 @@ static int process_received_buf(char * in_buf, int in_len, char * out_buf, int *
         }
         else if (i3)
         {
+            ESP_LOGI(TAG, "Entering delete files task...");
             fm_delete_all_files(); // Must do the deletion
+            ESP_LOGI(TAG, "Exiting delete files task...");
         }
         else if (i1 && i2)
         {
