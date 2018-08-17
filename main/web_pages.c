@@ -198,29 +198,77 @@ int create_web_page_file(char * buff, int * buff_size, int pageNum)
 }
 
 
-#define HTML_PAGE_F1    "<html>\r\n" \
+#define HTML_PAGE_FILE_1    "<html>\r\n" \
                         "<head>\r\n" \
-                        "<title>%04d</title></head><body>\r\n" \
-                        "<p>1,0.250,0.062,1.030</p>\r\n" \
-                        "<a href=\"../\">Home </a>\r\n" \
+                        "<title>%04d</title></head><body>\r\n"
+                        
+                        
+                        
+                     //   "<p>1,0.250,0.062,1.030</p>\r\n" 
+
+
+#define HTML_PAGE_FILE_2    "<a href=\"../\">Home </a>\r\n" \
                         "</body>\r\n" \
                         "</html>\r\n" \
                         "\r\n"
 
 
-const char html_page_f1[] = HTML_PAGE_F1;
-
+const char html_page_f1[] = HTML_PAGE_FILE_1;
+const char html_page_f2[] = HTML_PAGE_FILE_2;
 
 static int create_web_page_html_file(char * buff, int * buff_size, int pageNum)
 {
-    if (*buff_size < strlen(html_page_f1))
+    if (!buff || !buff_size)
+    {
+        return 0;
+    }
+
+    if (*buff_size < strlen(html_page_f1) + strlen(html_page_f2))
     {
         return 0;
     }
     
-    sprintf(buff, html_page_f1, pageNum);
+    char * buff_2;
+    int len_to_go = * buff_size;
+    
+    static FILE_STRUCT_t theF;
+    
+    
+    ESP_LOGI(TAG, "Getting file...");
+    
+    if (fm_get_file(&theF, pageNum))
+    {
+        sprintf(buff, html_page_f1, pageNum);
+        
+        buff_2 = buff + strlen(buff);
+        
+        char strftime_buf [64];
+        
+        // Print measurement time
+        sprintf(buff_2, "<p>%s</p>\r\n", ctime(&theF.time));
+        buff_2 += strlen(buff_2);
 
-    return 1;
+        int i;
+        
+        for(i = 0; i < 500; i ++)
+        {
+            sprintf(buff_2, "<p>%d,%0.4f,%0.4f,%0.4f</p>\r\n", theF.read[i].index,
+                                                                theF.read[i].x,
+                                                                theF.read[i].y,
+                                                                theF.read[i].z);
+            buff_2 += strlen(buff_2);
+        }
+        buff_2 += strlen(buff_2);
+
+        strcpy(buff_2, html_page_f2);
+
+        return 1;
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Couldn't read file");
+        return 0;
+    }
 }
 
 

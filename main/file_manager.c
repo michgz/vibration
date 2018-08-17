@@ -163,6 +163,72 @@ void fm_init(void)
 
 }
 
+int  fm_get_file(FILE_STRUCT_t * ff, int fn)
+{
+    int res = 0;
+
+    if (!ff)
+    {
+        return 0;
+    }
+    if (fn < 0 || fn >= theCurrentFileNumber)
+    {
+        return 0;
+    }
+
+    ESP_LOGI(TAG, "Initializing SPIFFS");
+    
+    esp_vfs_spiffs_conf_t conf = {
+      .base_path = "/spiffs",
+      .partition_label = NULL,
+      .max_files = 5,
+      .format_if_mount_failed = false
+    };
+    
+    // Use settings defined above to initialize and mount SPIFFS filesystem.
+    // Note: esp_vfs_spiffs_register is an all-in-one convenience function.
+    esp_err_t ret = esp_vfs_spiffs_register(&conf);
+
+    if (ret != ESP_OK) {
+        if (ret == ESP_FAIL) {
+            ESP_LOGE(TAG, "Failed to mount or format filesystem");
+        } else if (ret == ESP_ERR_NOT_FOUND) {
+            ESP_LOGE(TAG, "Failed to find SPIFFS partition");
+        } else {
+            ESP_LOGE(TAG, "Failed to initialize SPIFFS (%s)", esp_err_to_name(ret));
+        }
+        return 0;
+    }
+
+    // Open named file for reading
+    ESP_LOGI(TAG, "Reading file");
+
+    char c [32];
+    
+    sprintf(c, "/spiffs/%04d", fn);
+
+    FILE * f = fopen(c, "r");
+    if (f == NULL) {
+        ESP_LOGE(TAG, "Failed to open file for reading");
+        goto failed_1;
+    }
+    
+    int sz = fread(ff, sizeof(float), sizeof(FILE_STRUCT_t)/sizeof(float), f);
+    ESP_LOGI(TAG, "Read %d words from file", sz);
+    res = 1;
+
+
+failed_1:
+    // All done, unmount partition and disable SPIFFS
+    esp_vfs_spiffs_unregister(NULL);
+    ESP_LOGI(TAG, "SPIFFS unmounted");
+    
+    return res;
+
+}
+
+
+
 int fm_get_largest_file_number(void)
 {
     return theCurrentFileNumber;

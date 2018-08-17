@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include "esp_err.h"
 #include "esp_log.h"
 
@@ -197,19 +198,7 @@ static float adxl_decode_reading(uint8_t raw_data[3])
 }
 
 
-typedef struct {
-    int index;
-    float x, y, z;
-    
-} READING_t ;
 
-typedef struct {
-    float freq;
-    float ampl;
-    
-    READING_t read [500];
-
-} FILE_STRUCT_t;
 
 
 
@@ -226,7 +215,7 @@ static int write_into_a_file(int number_to_write, FILE_STRUCT_t * f_in)
       .base_path = "/spiffs",
       .partition_label = NULL,
       .max_files = 5,
-      .format_if_mount_failed = true
+      .format_if_mount_failed = false
     };
     
     // Use settings defined above to initialize and mount SPIFFS filesystem.
@@ -243,27 +232,19 @@ static int write_into_a_file(int number_to_write, FILE_STRUCT_t * f_in)
         }
         return;
     }
-    
-    size_t total = 0, used = 0;
-    ret = esp_spiffs_info(NULL, &total, &used);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s)", esp_err_to_name(ret));
-    } else {
-        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
-    }
 
     // Create a file.
     ESP_LOGI(TAG, "Opening file");
     {
-    char c[24];
-    sprintf(c, "/spiffs/%04d", number_to_write);
-    FILE* f = fopen(c, "w");
-    if (f == NULL) {
-        ESP_LOGE(TAG, "Failed to open file for writing");
-        return;
-    }
-    fwrite(f_in, sizeof(FILE_STRUCT_t)/sizeof(float), sizeof(float), f);
-    fclose(f);
+        char c[24];
+        sprintf(c, "/spiffs/%04d", number_to_write);
+        FILE* f = fopen(c, "w");
+        if (f == NULL) {
+            ESP_LOGE(TAG, "Failed to open file for writing");
+            return;
+        }
+        fwrite(f_in, sizeof(FILE_STRUCT_t)/sizeof(float), sizeof(float), f);
+        fclose(f);
     }
     ESP_LOGI(TAG, "File written");
 
@@ -301,6 +282,10 @@ static void i2c_test_task(void* arg)
 
             theFile.freq = 1.0;
             theFile.ampl = 0.0;
+            if (CONFIG_USE_SNTP)
+            {
+                theFile.time = time(NULL);
+            }
 
             while(count_readings<500)
             {
@@ -344,7 +329,7 @@ static void i2c_test_task(void* arg)
 
             // Now write into the file
             (void) write_into_a_file(fm_get_largest_file_number() + 1, &theFile);
-            
+
             fm_add_file();
 
         }
