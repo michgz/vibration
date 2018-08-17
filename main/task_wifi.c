@@ -41,7 +41,7 @@ const static char *TAG = "TASK_WIFI";
 
 static OPERATION_t oper = (OPERATION_t){18.5,-22.0,0.,0.,0};
 
-#define HTTP_PORT  80   // or 8080.....
+#define HTTP_PORT  MAIN_LOOP_LOCAL_HTTP_PORT
 
 /* Is a character a decimal digit??  */
 static bool isDigit(char c)
@@ -56,14 +56,14 @@ static int digitVal(char c)
 
 static int process_received_buf(char * in_buf, int in_len, char * out_buf, int * out_len);
 
-static void openssl_example_task(void *p)
+static void http_loop_task(void *p)
 {
     int ret;
 
     struct netconn * nc1;
     struct netconn * nc2;
 
-    char recv_buf[OPENSSL_EXAMPLE_RECV_BUF_LEN];
+    char recv_buf[MAIN_LOOP_RECV_BUF_LEN];
 
     ESP_LOGI(TAG, "HTTP server netconn create ......");
     nc1 = netconn_new(NETCONN_TCP);
@@ -105,7 +105,7 @@ reconnect:
     ESP_LOGI(TAG, "HTTP server read message ......");
     do {
         struct netbuf * nb1 = NULL;
-        memset(recv_buf, 0, OPENSSL_EXAMPLE_RECV_BUF_LEN);
+        memset(recv_buf, 0, MAIN_LOOP_RECV_BUF_LEN);
         ret = netconn_recv(nc2, &nb1);
         if (!!ret || !nb1) {
             break;
@@ -114,9 +114,9 @@ reconnect:
         int recv_buf_len = 0;
         
         recv_buf_len = netbuf_len(nb1);
-        if (recv_buf_len > OPENSSL_EXAMPLE_RECV_BUF_LEN - 1)
+        if (recv_buf_len > MAIN_LOOP_RECV_BUF_LEN - 1)
         {
-            recv_buf_len = OPENSSL_EXAMPLE_RECV_BUF_LEN - 1;
+            recv_buf_len = MAIN_LOOP_RECV_BUF_LEN - 1;
         }
         
         recv_buf_len = netbuf_copy(nb1, recv_buf, recv_buf_len);
@@ -174,15 +174,15 @@ static void http_server_init(void)
     int ret;
     xTaskHandle http_handle;
 
-    ret = xTaskCreate(openssl_example_task,
-                      OPENSSL_EXAMPLE_TASK_NAME,
-                      OPENSSL_EXAMPLE_TASK_STACK_WORDS,
+    ret = xTaskCreate(http_loop_task,
+                      MAIN_LOOP_TASK_NAME,
+                      MAIN_LOOP_TASK_STACK_WORDS,
                       NULL,
-                      OPENSSL_EXAMPLE_TASK_PRIORITY,
+                      MAIN_LOOP_TASK_PRIORITY,
                       &http_handle); 
 
     if (ret != pdPASS)  {
-        ESP_LOGI(TAG, "create task %s failed", OPENSSL_EXAMPLE_TASK_NAME);
+        ESP_LOGI(TAG, "create task %s failed", MAIN_LOOP_TASK_NAME);
     }
 }
 
