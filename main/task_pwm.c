@@ -15,6 +15,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 #include "freertos/event_groups.h"
 
 #include "driver/gpio.h"
@@ -215,6 +216,7 @@ static void inline print_timer_counter(uint64_t counter_value)
 typedef struct {
     float freq;
     float ampl;
+    SemaphoreHandle_t  finished_sema;
 } PWM_OPERATION_t;
 
 static PWM_OPERATION_t pwmOp;
@@ -309,6 +311,9 @@ void pwm_task(void *pvParameter)
 
     } while(0);
 
+
+    xSemaphoreGive(((PWM_OPERATION_t *) pvParameter)->finished_sema);
+
     vTaskDelete(NULL);
 
 }
@@ -354,10 +359,13 @@ void app_main_do_pwm(OPERATION_t * op)
         pwmOp.ampl = op->ampl_used;
     }
 
+    pwmOp.finished_sema = xSemaphoreCreateBinary();
+
     timer_queue = xQueueCreate(10, sizeof(timer_event_t));
 
     xTaskCreate(&pwm_task, "pwm_task", 2048, &pwmOp, 5, NULL);
 
+    (void) xSemaphoreTake(pwmOp.finished_sema, portMAX_DELAY);  // wait for the task to complete
 }
 
 void prepare_operation(OPERATION_t * op)
