@@ -18,6 +18,8 @@
 #include "esp_wifi.h"
 #include "esp_event_loop.h"
 
+#include "sdkconfig.h"
+
 #include "lwip/api.h"
 #include "lwip/sockets.h"
 #include "lwip/netdb.h"
@@ -194,7 +196,10 @@ static esp_err_t wifi_event_handler(void *ctx, system_event_t *event)
         break;
     case SYSTEM_EVENT_STA_GOT_IP:
         xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
-        do_sntp_task();
+        if (CONFIG_USE_SNTP)
+        {
+            do_sntp_task();
+        }
         http_server_init();
         break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
