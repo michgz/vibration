@@ -13,6 +13,10 @@
 #define EXAMPLE_WIFI_SSID                CONFIG_ESP_WIFI_SSID
 #define EXAMPLE_WIFI_PASS                CONFIG_ESP_WIFI_PASSWORD
 
+#ifndef CONFIG_USE_SNTP
+    #define CONFIG_USE_SNTP 0
+#endif
+
 #define MAIN_LOOP_TASK_NAME        "main_loop"
 #define MAIN_LOOP_TASK_STACK_WORDS 10240
 #define MAIN_LOOP_TASK_PRIORITY    8

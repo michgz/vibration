@@ -177,46 +177,85 @@ static int create_web_page_html(char * buff, int * buff_size, OPERATION_t * op)
 }
 
 
-int create_web_page_file(char * buff, int * buff_size, int pageNum)
-{
-    int ret = 1;
-
-    if (!buff || !buff_size)
-    {
-        return 0;
-    }
-
-    ret = create_web_page_html_file(buff, buff_size, pageNum);
-
-    if (ret)
-    {
-        ret = add_http_header_response(buff, buff_size);
-    }
-
-    return ret;
-
-}
-
 
 #define HTML_PAGE_FILE_1    "<html>\r\n" \
-                        "<head>\r\n" \
-                        "<title>%04d</title></head><body>\r\n"
-                        
-                        
-                        
-                     //   "<p>1,0.250,0.062,1.030</p>\r\n" 
+                            "<head>\r\n" \
+                            "<title>%04d</title></head><body>\r\n"
+
 
 
 #define HTML_PAGE_FILE_2    "<a href=\"../\">Home </a>\r\n" \
-                        "</body>\r\n" \
-                        "</html>\r\n" \
-                        "\r\n"
+                            "</body>\r\n" \
+                            "</html>\r\n" \
+                            "\r\n"
+
 
 
 const char html_page_f1[] = HTML_PAGE_FILE_1;
 const char html_page_f2[] = HTML_PAGE_FILE_2;
 
-static int create_web_page_html_file(char * buff, int * buff_size, int pageNum)
+
+
+typedef struct {
+
+    int have_started;
+    FILE_STRUCT_t theF;
+    int step;
+    int pageNo;
+    int nextStep;
+    
+} FILE_PAGE_t;
+
+static FILE_PAGE_t theStruct = {0};
+
+
+// Get the "step" in the file HTML page. The first step is the header, and so on.
+// The input buffer must be big enough for any step -- the first one is the 
+// biggest.
+static int get_step(char * buff, int stepNo, FILE_PAGE_t * fp)
+{
+
+    if (stepNo == 0)   // header
+    {
+        sprintf(buff, html_page_f1, fp->pageNo);
+        return 1;
+    }
+    else if (stepNo == 1)  // date line
+    {
+        // Print measurement time
+        sprintf(buff, "<p>%s</p>\r\n", ctime(&fp->theF.time));
+        return 1;
+    }
+    else if (stepNo < 502)   // 500 data lines
+    {
+        int i = stepNo - 2;
+        sprintf(buff, "<p>%d,%0.4f,%0.4f,%0.4f</p>\r\n", fp->theF.read[i].index,
+                                                            fp->theF.read[i].x,
+                                                            fp->theF.read[i].y,
+                                                            fp->theF.read[i].z);
+        return 1;
+    }
+    else if (stepNo == 502)   // footer
+    {
+        strcpy(buff, html_page_f2);
+        return 1;
+    }
+    
+    return 0;
+
+}
+
+
+
+
+#define HTTP_HEAD_3       "HTTP/1.1 200 OK\r\n" \
+                          "Content-Type: text/html\r\n" \
+                          "Content-Length: %d\r\n\r\n"
+
+const char http_head_3 [] = HTTP_HEAD_3;
+
+
+int create_web_page_file(char * buff, int * buff_size, int pageNum)
 {
     if (!buff || !buff_size)
     {
@@ -231,45 +270,159 @@ static int create_web_page_html_file(char * buff, int * buff_size, int pageNum)
     char * buff_2;
     int len_to_go = * buff_size;
     
-    static FILE_STRUCT_t theF;
     
-    
-    ESP_LOGI(TAG, "Getting file...");
-    
-    if (fm_get_file(&theF, pageNum))
+    if (!theStruct.have_started)
     {
-        sprintf(buff, html_page_f1, pageNum);
-        
-        buff_2 = buff + strlen(buff);
-        
-        char strftime_buf [64];
-        
-        // Print measurement time
-        sprintf(buff_2, "<p>%s</p>\r\n", ctime(&theF.time));
-        buff_2 += strlen(buff_2);
-
-        int i;
-        
-        for(i = 0; i < 500; i ++)
+        ESP_LOGI(TAG, "Getting file...");
+    
+        if (fm_get_file(&theStruct.theF, pageNum))
         {
-            sprintf(buff_2, "<p>%d,%0.4f,%0.4f,%0.4f</p>\r\n", theF.read[i].index,
-                                                                theF.read[i].x,
-                                                                theF.read[i].y,
-                                                                theF.read[i].z);
-            buff_2 += strlen(buff_2);
+            ESP_LOGI(TAG, "Have opened file");
+            theStruct.have_started = 1;
+            theStruct.step = 0;
+            theStruct.pageNo = pageNum;
         }
-        buff_2 += strlen(buff_2);
-
-        strcpy(buff_2, html_page_f2);
-
-        return 1;
+        else
+        {
+            return 0 ;  // Bail!
+        }
     }
-    else
-    {
-        ESP_LOGI(TAG, "Couldn't read file");
-        return 0;
-    }
+    
+    // At this point the file is gotten
+
+    // Add up the length from each step.
+
+    int totalLen = 0;
+    int i = 0;
+    int val = 0;
+    
+    do {
+        val = get_step(buff, i ++, &theStruct);
+        totalLen += strlen(buff);
+    
+    } while (val != 0);
+
+    ESP_LOGI(TAG, "Have found that the total page length will be %d", totalLen);
+
+    buff_2 = buff;
+
+
+    // Now we have the total length, can fill it in.
+
+    sprintf(buff, http_head_3, totalLen);
+    
+
+    // Now do the steps until we run out of room.
+    
+    
+    int thisLen;
+    int lenSoFar = 0;
+    
+    thisLen = strlen(buff);
+    len_to_go -= thisLen;
+    buff_2 += thisLen;
+    lenSoFar += thisLen;
+    
+    i = 0;
+    
+    char localBuf [80];
+    
+    do {
+        val = get_step(localBuf, i, &theStruct);
+        if (!val)
+        {
+            // End! Done.
+            theStruct.have_started = 0;
+            *buff_size = lenSoFar;            
+            return 1;
+        }
+        thisLen = strlen(localBuf);
+        if (thisLen < len_to_go)
+        {
+            // Have room to put it in.
+            strcpy(buff_2, localBuf);
+            buff_2 += thisLen;
+            len_to_go -= thisLen;
+            lenSoFar += thisLen;
+            i ++;
+        
+        }
+        else
+        {
+            // Not room -- wait til next time.
+            theStruct.nextStep = i;
+            *buff_size = lenSoFar;
+            return 2;
+            
+        }
+    
+    } while (true);
+
+    return 1;
+
 }
+
+
+
+
+int process_more_buf(char * buff, int * buff_size)
+{
+    if (!theStruct.have_started)
+    {
+        return 0;  // shouldn't get here!
+    }
+
+
+    int thisLen;
+    int lenSoFar = 0;
+    
+    int len_to_go = *buff_size;
+    char * buff_2 = buff;
+
+    
+    int i = theStruct.nextStep;
+    
+    char localBuf [80];
+    int val;
+    
+    do {
+        val = get_step(localBuf, i, &theStruct);
+        if (!val)
+        {
+            // End! Done.
+            theStruct.have_started = 0;
+            *buff_size = lenSoFar;            
+            return 1;
+        }
+        thisLen = strlen(localBuf);
+        if (thisLen < len_to_go)
+        {
+            // Have room to put it in.
+            strcpy(buff_2, localBuf);
+            buff_2 += thisLen;
+            len_to_go -= thisLen;
+            lenSoFar += thisLen;
+            i ++;
+        
+        }
+        else
+        {
+            // Not room -- wait til next time.
+            theStruct.nextStep = i;
+            *buff_size = lenSoFar;
+            return 2;
+            
+        }
+    
+    } while (true);
+
+    return 1;
+
+}
+
+
+
+
 
 
 int create_web_page_delete_all(char * buff, int * buff_size)

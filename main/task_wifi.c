@@ -132,7 +132,7 @@ reconnect:
         
         ESP_LOGI(TAG, "HTTP received %d bytes", recv_buf_len);
         ESP_LOGI(TAG, "HTTP read: %s", recv_buf);
-        
+
         send_bytes = 2048;  // initialise to maximum
         int val = process_received_buf(recv_buf, recv_buf_len, send_data, &send_bytes);
         
@@ -149,7 +149,26 @@ reconnect:
             }
         }
         
-        
+        while (val == 2)   // this indicates "more to write"
+        {
+            send_bytes = 2048;
+            val = process_more_buf(send_data, &send_bytes);
+             
+            if (val != 0)
+            {
+                ESP_LOGI(TAG, "Send data len = %d", send_bytes);
+                ESP_LOGI(TAG, "Send data: %s", send_data);
+                
+                ret = netconn_write(nc2, send_data, send_bytes, NETCONN_COPY);
+                if (!ret) {
+                    ESP_LOGI(TAG, "OK");
+                } else {
+                    ESP_LOGI(TAG, "error");
+                }
+            }
+
+        }        
+
         break;  // Is this needed? Under what circumstances??
         
 
