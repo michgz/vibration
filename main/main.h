@@ -38,23 +38,6 @@ typedef struct {
 } OPERATION_t ;
 
 typedef struct {
-    float t;    // Units seconds
-    float x;    // Units g
-    float y;    // Units g
-    float z;    // Units g
-
-} SINGLE_RESULT_t ;
-
-typedef struct {
-
-    float freq_used;        // Units Hz
-    float ampl_used;        // Units dB
-    time_t   time;
-    SINGLE_RESULT_t res [500];
-
-} RESULTS_FILE_t ;
-
-typedef struct {
     int index;
     float x, y, z;
     

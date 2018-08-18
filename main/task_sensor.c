@@ -26,8 +26,8 @@
  * Pin assignment:
  *
  * - master:
- *    GPIO18 is assigned as the data signal of i2c master port
- *    GPIO19 is assigned as the clock signal of i2c master port
+ *    GPIO18 is assigned as the data signal of i2c master port (BLUE)
+ *    GPIO19 is assigned as the clock signal of i2c master port (GREEN)
  *
  */
 
@@ -38,6 +38,9 @@
 #define I2C_MASTER_RX_BUF_DISABLE  0                /*!< I2C master do not need buffer */
 #define I2C_MASTER_FREQ_HZ         1000000          /*!< I2C master clock frequency */
 
+
+/* Sensor defines    */
+
 #define ADXL355_SENSOR_ADDR   0x1D
 #define ADXL355_CMD_DEVID_AD  0x00
 #define ADXL355_CMD_FILTER    0x28
@@ -47,6 +50,8 @@
 #define ADXL355_CMD_STATUS 0x04
 
 
+/* I2C defines    */
+
 #define WRITE_BIT                          I2C_MASTER_WRITE /*!< I2C master write */
 #define READ_BIT                           I2C_MASTER_READ  /*!< I2C master read */
 #define ACK_CHECK_EN                       0x1              /*!< I2C master will check ack from slave*/
@@ -54,10 +59,28 @@
 #define ACK_VAL                            0x0              /*!< I2C ack value */
 #define NACK_VAL                           0x1              /*!< I2C nack value */
 
+
+
+/* Timer defines   */
+
+#define TIMER_DIVIDER         16  //  Hardware timer clock divider
+#define TIMER_SCALE           (TIMER_BASE_CLK / TIMER_DIVIDER)  // convert counter value to seconds
+#define TIMER_INTERVAL0_SEC   (0.001)   // sample test interval for the first timer
+#define TEST_WITHOUT_RELOAD   0        // testing will be done without auto reload
+#define TEST_WITH_RELOAD      1        // testing will be done with auto reload
+#define TEST_CONTINUOUS       2
+
+
+
+TaskHandle_t task_to_notify;
+
+
+
+
 const static char *TAG = "TASK_SENSOR";
 
-static void example_tg1_timer_deinit(int timer_idx);
-
+static void tg1_timer_init(int, int, double);
+static void tg1_timer_deinit(int timer_idx);
 
 /* Write a value into a register.   */
 static esp_err_t i2c_adxl_write_single_register(i2c_port_t i2c_num, uint8_t addr, uint8_t data_wr)
@@ -156,7 +179,7 @@ static esp_err_t i2c_adxl_read_device_id(i2c_port_t i2c_num, uint8_t data[4])
 /**
  * @brief i2c master initialization
  */
-static void i2c_example_master_init()
+static void i2c_hw_init()
 {
     int i2c_master_port = I2C_MASTER_NUM;
     i2c_config_t conf;
@@ -170,6 +193,12 @@ static void i2c_example_master_init()
     i2c_driver_install(i2c_master_port, conf.mode,
                        I2C_MASTER_RX_BUF_DISABLE,
                        I2C_MASTER_TX_BUF_DISABLE, 0);
+}
+
+static void i2c_hw_deinit()
+{
+    int i2c_master_port = I2C_MASTER_NUM;
+    i2c_driver_delete(i2c_master_port);
 }
 
 
@@ -263,6 +292,11 @@ static void i2c_test_task(void* arg)
     int count_readings = 0;
     int count_notifications = 0;
 
+
+    tg1_timer_init(TIMER_0, TEST_WITH_RELOAD, TIMER_INTERVAL0_SEC);
+
+    i2c_hw_init();
+
     ret = i2c_adxl_read_device_id(I2C_MASTER_NUM, dev_id);
 
     if (ret == ESP_OK)
@@ -338,24 +372,24 @@ static void i2c_test_task(void* arg)
             ESP_LOGI(TAG, "Not recognised as any known accelerometer");
         }
     }
+    else
+    {
+        ESP_LOGI(TAG, "Failed to access sensor");
+    }
 
-    example_tg1_timer_deinit(TIMER_0);
+    /* Wait briefly (seems to help stability)   */
+    vTaskDelay( 150 / portTICK_RATE_MS );
 
+    /* Turn off the I2C function    */
+    i2c_hw_deinit();
+
+    /* Turn off the timer function   */
+    tg1_timer_deinit(TIMER_0);
+
+    /* End this task - we are done!   */
     vTaskDelete(NULL);
 
 }
-
-
-#define TIMER_DIVIDER         16  //  Hardware timer clock divider
-#define TIMER_SCALE           (TIMER_BASE_CLK / TIMER_DIVIDER)  // convert counter value to seconds
-#define TIMER_INTERVAL0_SEC   (0.001)   // sample test interval for the first timer
-#define TEST_WITHOUT_RELOAD   0        // testing will be done without auto reload
-#define TEST_WITH_RELOAD      1        // testing will be done with auto reload
-#define TEST_CONTINUOUS       2
-
-
-
-TaskHandle_t task_to_notify;
 
 
 /*
@@ -407,7 +441,7 @@ void IRAM_ATTR timer_group1_isr(void *para)
  * auto_reload - should the timer auto reload on alarm?
  * timer_interval_sec - the interval of alarm to set
  */
-static void example_tg1_timer_init(int timer_idx, 
+static void tg1_timer_init(int timer_idx, 
     int auto_reload, double timer_interval_sec)
 {
     /* Select and initialize basic parameters of the timer */
@@ -436,19 +470,13 @@ static void example_tg1_timer_init(int timer_idx,
     timer_start(TIMER_GROUP_1, timer_idx);
 }
 
-static void example_tg1_timer_deinit(int timer_idx)
+static void tg1_timer_deinit(int timer_idx)
 {
     timer_pause(TIMER_GROUP_1, timer_idx);
 }
 
 void app_main_task_sensor()
 {
-    i2c_example_master_init();
-
-
     xTaskCreate(i2c_test_task, "i2c_test_task_0", 1024 * 2, (void* ) 0, 10, &task_to_notify);
-
-    example_tg1_timer_init(TIMER_0, TEST_WITH_RELOAD, TIMER_INTERVAL0_SEC);
-
 }
 
