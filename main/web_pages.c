@@ -206,6 +206,14 @@ typedef struct {
     
 } FILE_PAGE_t;
 
+
+static float to_x(int s)   {return 10.+1.75*(float)s;}
+static float to_y(float t) {
+    if (t >   1.0) {t =  1.0;}
+    if (t <  -1.0) {t = -1.0;}
+    return 175.0-140.*(float)t;
+}
+
 static FILE_PAGE_t theStruct = {0};
 
 
@@ -220,22 +228,70 @@ static int get_step(char * buff, int stepNo, FILE_PAGE_t * fp)
         sprintf(buff, html_page_f1, fp->pageNo);
         return 1;
     }
-    else if (stepNo == 1)  // date line
+    else if (stepNo == 1) 
+    {
+        sprintf(buff, "<svg height=\"%0.1f\" width=\"%0.1f\">\r\n  <polyline points=\"", to_y(-1.25), to_x(500));
+        return 1;
+    }
+    else if (stepNo < 502)    // 500 points - X plot
+    {
+        int i = stepNo - 2;
+        sprintf(buff, "%0.1f,%0.1f ", to_x(fp->theF.read[i].index), to_y(fp->theF.read[i].x));
+        return 1;
+    }
+    else if (stepNo == 502) 
+    {
+        strcpy(buff, "\" style=\"fill:none;stroke:red;stroke-width:0.5\" />\r\n");
+        return 1;
+    }
+    else if (stepNo == 503) 
+    {
+        strcpy(buff, "  <polyline points=\"");
+        return 1;
+    }
+    else if (stepNo < 1004)    // 500 points - Y plot
+    {
+        int i = stepNo - 504;
+        sprintf(buff, "%0.1f,%0.1f ", to_x(fp->theF.read[i].index), to_y(fp->theF.read[i].y));
+        return 1;
+    }
+    else if (stepNo == 1004) 
+    {
+        strcpy(buff, "\" style=\"fill:none;stroke:green;stroke-width:0.5\" />\r\n");
+        return 1;
+    }
+    else if (stepNo == 1005) 
+    {
+        strcpy(buff, "  <polyline points=\"");
+        return 1;
+    }
+    else if (stepNo < 1506)    // 500 points - Z plot
+    {
+        int i = stepNo - 1006;
+        sprintf(buff, "%0.1f,%0.1f ", to_x(fp->theF.read[i].index), to_y(fp->theF.read[i].z));
+        return 1;
+    }
+    else if (stepNo == 1506) 
+    {
+        strcpy(buff, "\" style=\"fill:none;stroke:purple;stroke-width:0.5\" />\r\n  Sorry, your browser does not support inline SVG.\r\n</svg>\r\n");
+        return 1;
+    }
+    else if (stepNo == 1507)  // date line
     {
         // Print measurement time
         sprintf(buff, "<p>%s</p>\r\n", ctime(&fp->theF.time));
         return 1;
     }
-    else if (stepNo < 502)   // 500 data lines
+    else if (stepNo < 2008)   // 500 data lines
     {
-        int i = stepNo - 2;
+        int i = stepNo - 1508;
         sprintf(buff, "<p>%d,%0.4f,%0.4f,%0.4f</p>\r\n", fp->theF.read[i].index,
                                                             fp->theF.read[i].x,
                                                             fp->theF.read[i].y,
                                                             fp->theF.read[i].z);
         return 1;
     }
-    else if (stepNo == 502)   // footer
+    else if (stepNo == 2008)   // footer
     {
         strcpy(buff, html_page_f2);
         return 1;
@@ -325,7 +381,7 @@ int create_web_page_file(char * buff, int * buff_size, int pageNum)
     
     i = 0;
     
-    char localBuf [80];
+    char localBuf [300];
     
     do {
         val = get_step(localBuf, i, &theStruct);
@@ -382,7 +438,7 @@ int process_more_buf(char * buff, int * buff_size)
     
     int i = theStruct.nextStep;
     
-    char localBuf [80];
+    char localBuf [300];
     int val;
     
     do {
