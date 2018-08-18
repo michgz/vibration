@@ -171,7 +171,7 @@ int  fm_get_file(FILE_STRUCT_t * ff, int fn)
     {
         return 0;
     }
-    if (fn < 0 || fn >= theCurrentFileNumber)
+    if (fn <= 0 || fn > theCurrentFileNumber)
     {
         return 0;
     }
