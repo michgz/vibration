@@ -216,7 +216,7 @@ static void inline print_timer_counter(uint64_t counter_value)
 typedef struct {
     float freq;
     float ampl;
-    SemaphoreHandle_t  finished_sema;
+
 } PWM_OPERATION_t;
 
 static PWM_OPERATION_t pwmOp;
@@ -286,6 +286,8 @@ static void do_a_pwm_operation(PWM_OPERATION_t *arg)
 
 }
 
+volatile static int lockout = 0;  // A very simple mutex
+
 void pwm_task(void *pvParameter)
 {
     /* Configure the IOMUX register for pad BLINK_GPIO (some pads are
@@ -294,26 +296,36 @@ void pwm_task(void *pvParameter)
        Technical Reference for a list of pads and their default
        functions.)
     */
-    
+    if (lockout != 0)
+    {
+        ESP_LOGI(TAG, "Will not enter the PWM task, hardware is already in use");
+        goto exit_1;
+    }
+    lockout = 1;
+
+    ESP_LOGI(TAG, "Starting the PWM task");
+
+    timer_queue = xQueueCreate(10, sizeof(timer_event_t));
+
     mcpwm_example_config();
     
-    do {
+    example_tg0_timer_init(TIMER_0, TEST_CONTINUOUS,  0);
+    example_tg0_timer_init(TIMER_1, TEST_WITH_RELOAD, TIMER_INTERVAL0_SEC);
 
-        example_tg0_timer_init(TIMER_0, TEST_CONTINUOUS,  0);
-        example_tg0_timer_init(TIMER_1, TEST_WITH_RELOAD, TIMER_INTERVAL0_SEC);
+    do_a_pwm_operation((PWM_OPERATION_t *) pvParameter);
 
-        do_a_pwm_operation((PWM_OPERATION_t *) pvParameter);
+    vTaskDelay(500 / portTICK_PERIOD_MS);
 
-        vTaskDelay(500 / portTICK_PERIOD_MS);
+    example_tg0_timer_deinit(TIMER_0);
+    example_tg0_timer_deinit(TIMER_1);
 
-        example_tg0_timer_deinit(TIMER_0);
-        example_tg0_timer_deinit(TIMER_1);
+    vQueueDelete(timer_queue);
+    
+    ESP_LOGI(TAG, "Exiting the PWM task");
+    
+    lockout = 0;
 
-    } while(0);
-
-
-    xSemaphoreGive(((PWM_OPERATION_t *) pvParameter)->finished_sema);
-
+exit_1:
     vTaskDelete(NULL);
 
 }
@@ -323,7 +335,6 @@ void pwm_task(void *pvParameter)
 
 static void mcpwm_example_gpio_initialize()
 {
-    //printf("initializing mcpwm gpio...\n");
 
     mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, GPIO_PWM0A_OUT);
     mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0B, GPIO_PWM0B_OUT);
@@ -359,13 +370,7 @@ void app_main_do_pwm(OPERATION_t * op)
         pwmOp.ampl = op->ampl_used;
     }
 
-    pwmOp.finished_sema = xSemaphoreCreateBinary();
-
-    timer_queue = xQueueCreate(10, sizeof(timer_event_t));
-
     xTaskCreate(&pwm_task, "pwm_task", 2048, &pwmOp, 5, NULL);
-
-    (void) xSemaphoreTake(pwmOp.finished_sema, portMAX_DELAY);  // wait for the task to complete
 }
 
 void prepare_operation(OPERATION_t * op)

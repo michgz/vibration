@@ -348,8 +348,8 @@ static int process_received_buf(char * in_buf, int in_len, char * out_buf, int *
 
             prepare_operation(&oper);
 
-            app_main_task_sensor();
-            app_main_do_pwm(&oper);
+            app_main_do_pwm(&oper);  // Returns immediately
+            app_main_task_sensor();  // Returns on completion
         }
         ESP_LOGI(TAG, "HTTP write message");
 

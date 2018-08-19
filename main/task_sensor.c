@@ -11,6 +11,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 #include "freertos/event_groups.h"
 
 #include "soc/timer_group_struct.h"
@@ -179,9 +180,11 @@ static esp_err_t i2c_adxl_read_device_id(i2c_port_t i2c_num, uint8_t data[4])
 /**
  * @brief i2c master initialization
  */
-static void i2c_hw_init()
+static esp_err_t i2c_hw_init()
 {
+    esp_err_t ret;
     int i2c_master_port = I2C_MASTER_NUM;
+
     i2c_config_t conf;
     conf.mode = I2C_MODE_MASTER;
     conf.sda_io_num = I2C_MASTER_SDA_IO;
@@ -189,16 +192,23 @@ static void i2c_hw_init()
     conf.scl_io_num = I2C_MASTER_SCL_IO;
     conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
     conf.master.clk_speed = I2C_MASTER_FREQ_HZ;
-    i2c_param_config(i2c_master_port, &conf);
-    i2c_driver_install(i2c_master_port, conf.mode,
+    ret = i2c_param_config(i2c_master_port, &conf);
+    if (ret != ESP_OK)
+    {
+        return ret;
+    }
+    ret = i2c_driver_install(i2c_master_port, conf.mode,
                        I2C_MASTER_RX_BUF_DISABLE,
                        I2C_MASTER_TX_BUF_DISABLE, 0);
+    return ret;
 }
 
-static void i2c_hw_deinit()
+static esp_err_t i2c_hw_deinit()
 {
     int i2c_master_port = I2C_MASTER_NUM;
     i2c_driver_delete(i2c_master_port);
+    
+    return ESP_OK;
 }
 
 
@@ -296,9 +306,13 @@ static void i2c_test_task(void* arg)
 
     tg1_timer_init(TIMER_0, TEST_WITH_RELOAD, TIMER_INTERVAL0_SEC);
 
-    i2c_hw_init();
+    ret = i2c_hw_init();
+    ESP_LOGI(TAG, "i2c_hw_init returned %d", ret);
 
     ret = i2c_adxl_read_device_id(I2C_MASTER_NUM, dev_id);
+    ESP_LOGI(TAG, "i2c_adxl_read_device_id returned %d", ret);
+
+ret = 8;    
 
     if (ret == ESP_OK)
     {
@@ -389,10 +403,14 @@ static void i2c_test_task(void* arg)
     vTaskDelay( 150 / portTICK_RATE_MS );
 
     /* Turn off the I2C function    */
-    i2c_hw_deinit();
+    ret = i2c_hw_deinit();
+    ESP_LOGI(TAG, "i2c_hw_deinit returned %d", ret);
 
     /* Turn off the timer function   */
     tg1_timer_deinit(TIMER_0);
+
+    /* Signal the caller   */
+    xSemaphoreGive( (SemaphoreHandle_t) arg);
 
     /* End this task - we are done!   */
     ESP_LOGI(TAG, "Ending task i2c_test_task");
@@ -486,6 +504,12 @@ static void tg1_timer_deinit(int timer_idx)
 
 void app_main_task_sensor()
 {
-    xTaskCreate(i2c_test_task, "i2c_test_task_0", 1024 * 2, (void* ) 0, 10, &task_to_notify);
+    SemaphoreHandle_t sem = xSemaphoreCreateBinary();
+
+    xTaskCreatePinnedToCore(i2c_test_task, "i2c_test_task_0", 1024 * 2, (void* ) sem, 10, &task_to_notify, 1);
+    
+    (void) xSemaphoreTake(sem, portMAX_DELAY);  // Wait for the task to complete.
+    
+    vSemaphoreDelete(sem);
 }
 
