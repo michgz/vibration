@@ -23,7 +23,7 @@ Components:
 - ESP32-DEVKITC, which combines the WROOM-32 module (rev. 1 silicon) with a 5V-to-3.3V regulator and some other circuitry
 - EVAL-ADXL355Z breakout board for the accelerometer (requires 3.3V power)
 - L298N dual H-bridge module with 12V-to-5V regulator, such as https://www.robotshop.com/uk/dc-motor-driver-module.html. I got a cheap one off e-bay, but unfortunately the regulator doesn't seem to be powerful enough to power the ESP32. Still investigating what's best here.
-- Voice coil. I'm using an old car audio speaker, but for better power and actuation movement consider a high-quality unit from http://moticont.com/ or http://www.beikimco.com/. I also use a 100R 5W resistor in series with the voice coil; it is _strongly recommended_ to have a resistive limiter of this sort, to avoid too much power going into the mechanical system. Don't rely on the software to do the right thing!!
+- Voice coil. I'm using an old car audio speaker, but for better power and actuation movement consider a high-quality unit from http://moticont.com/ or http://www.beikimco.com/. I also use a 100R 1W resistor in series with the voice coil; it is _strongly recommended_ to have a resistive limiter of this sort, to avoid too much power going into the mechanical system. Don't rely on the software to do the right thing!!
 - 12V DC supply
 - 5V USB supply (if your L298N board isn't suitable for supplying 5V, as in my case).
 
