@@ -38,12 +38,7 @@ const static char *TAG = "TASK_PWM";
 
 
 
-const float SINE_128 [127];
-
-// If =1: use RTOS timer to determine flash times
-// If =0: use hardware timer to determine flash times.
-//
-const int FlashFromRtos = 0;
+extern const float SINE_128 [127];
 
 #define BLINK_GPIO 23   // the pin right next to GND.
 
@@ -137,12 +132,6 @@ void IRAM_ATTR timer_group0_isr(void *para)
        and update the alarm time for the timer with without reload */
     if ((intr_status & BIT(timer_idx)) && timer_idx == TIMER_1) {
         TIMERG0.int_clr_timers.t1 = 1;
-        //timer_counter_value += (uint64_t) (TIMER_INTERVAL0_SEC * TIMER_SCALE);
-        //TIMERG0.hw_timer[timer_idx].alarm_high = (uint32_t) (timer_counter_value >> 32);
-        //TIMERG0.hw_timer[timer_idx].alarm_low = (uint32_t) timer_counter_value;
-    } else if ((intr_status & BIT(timer_idx)) && timer_idx == TIMER_0) {
-        //TIMERG0.int_clr_timers.t0 = 1;
-    } else {
     }
 
     /* After the alarm has been triggered
@@ -197,20 +186,12 @@ static void example_tg0_timer_init(int timer_idx,
     timer_start(TIMER_GROUP_0, timer_idx);
 }
 
+/*
+ * De-initialise the selected timer of group 0.
+ */
 static void example_tg0_timer_deinit(int timer_idx)
 {
     timer_pause(TIMER_GROUP_0, timer_idx);
-}
-
-/*
- * A simple helper function to print the raw timer counter value
- * and the counter value converted to seconds
- */
-static void inline print_timer_counter(uint64_t counter_value)
-{
-    printf("Counter: 0x%08x%08x\n", (uint32_t) (counter_value >> 32),
-                                    (uint32_t) (counter_value));
-    printf("Time   : %.8f s\n", (double) counter_value / TIMER_SCALE);
 }
 
 typedef struct {
@@ -253,28 +234,20 @@ static void do_a_pwm_operation(PWM_OPERATION_t *arg)
 
         if (evt.timer_idx == TIMER_1) {
 
-            if (FlashFromRtos == 0) {
-                if (dutyToSet >= 0.0) {
-                    // Positive phase, place on A output
-                    mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, dutyToSet);
-                    mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 0.0);
-                }
-                else {
-                    // Negative phase, place on B output
-                    mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0.0);
-                    mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, -dutyToSet);
-                }
+            if (dutyToSet >= 0.0) {
+                // Positive phase, place on A output
+                mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, dutyToSet);
+                mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 0.0);
+            }
+            else {
+                // Negative phase, place on B output
+                mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0.0);
+                mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, -dutyToSet);
             }
 
             /* Print the timer values passed by event */
-            //printf("------- EVENT TIME --------\n");
-            //print_timer_counter(evt.timer_counter_value);
-
-            /* Print the timer values as visible by this task */
-            //printf("-------- TASK TIME --------\n");
             uint64_t task_counter_value;
             timer_get_counter_value(evt.timer_group, evt.timer_idx ^ 1, &task_counter_value);
-            //print_timer_counter(task_counter_value);
 
             x += 1;
 
@@ -351,9 +324,9 @@ static void mcpwm_example_config(void)
     //2. initialize mcpwm configuration
     //printf("Configuring Initial Parameters of mcpwm...\n");
     mcpwm_config_t pwm_config;
-    pwm_config.frequency = 2000;    //frequency = 1000Hz
-    pwm_config.cmpr_a = 0.0;       //duty cycle of PWMxA = 60.0%
-    pwm_config.cmpr_b = 0.0;       //duty cycle of PWMxb = 50.0%
+    pwm_config.frequency = 20000;   //Units of Hz
+    pwm_config.cmpr_a = 0.0;       //Units of %
+    pwm_config.cmpr_b = 0.0;       //Units of %
     pwm_config.counter_mode = MCPWM_UP_DOWN_COUNTER;
     pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
     mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);   //Configure PWM0A & PWM0B with above settings

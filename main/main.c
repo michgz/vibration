@@ -27,11 +27,7 @@
 #include "nvs_flash.h"
 
 #include "task_wifi.h"
-#include "task_pwm.h"
-#include "task_sensor.h"
 #include "file_manager.h"
-
-const static char *TAG = "TASK_MAIN";
 
 
 
@@ -42,8 +38,6 @@ void app_main(void)
     // Create the file system if it is not already created, and if it is then find
     // the largest file number that exists.
     fm_init();
-
-//    app_main_task_sensor();
 
     wifi_conn_init();
 }

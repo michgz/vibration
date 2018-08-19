@@ -506,6 +506,10 @@ void app_main_task_sensor()
 {
     SemaphoreHandle_t sem = xSemaphoreCreateBinary();
 
+    // Start the task.
+    // Must be pinned to a core, or there is a risk of a fault. See
+    //  https://github.com/espressif/esp-idf/issues/2211
+    //
     xTaskCreatePinnedToCore(i2c_test_task, "i2c_test_task_0", 1024 * 2, (void* ) sem, 10, &task_to_notify, 1);
     
     (void) xSemaphoreTake(sem, portMAX_DELAY);  // Wait for the task to complete.

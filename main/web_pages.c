@@ -28,7 +28,6 @@ const OPERATION_t oper_default = OPERATION_DEFAULT;
 
 
 static int create_web_page_html(char *, int *, OPERATION_t *);
-static int create_web_page_html_file(char *, int *, int);
 static int create_web_page_html_delete_all(char * buff, int *buff_size);
 
 
@@ -42,7 +41,7 @@ int create_web_page(char * buff, int *buff_size, OPERATION_t * op)
     
     if (op == NULL)
     {
-        op = &oper_default;
+        op = (OPERATION_t *) &oper_default;
     }
     else
     {
