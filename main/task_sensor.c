@@ -292,6 +292,7 @@ static void i2c_test_task(void* arg)
     int count_readings = 0;
     int count_notifications = 0;
 
+    ESP_LOGI(TAG, "Entering i2c_test_task_0");
 
     tg1_timer_init(TIMER_0, TEST_WITH_RELOAD, TIMER_INTERVAL0_SEC);
 
@@ -340,14 +341,21 @@ static void i2c_test_task(void* arg)
                     {
                         uint8_t readings [9];
 
-                        (void) i2c_adxl_read_multiple(I2C_MASTER_NUM, ADXL355_CMD_XDATA3, readings, 9);
+                        ret = i2c_adxl_read_multiple(I2C_MASTER_NUM, ADXL355_CMD_XDATA3, readings, 9);
 
                         //ESP_LOGI(TAG, "Reading: %0.6f, %0.6f, %0.6f", adxl_decode_reading(&readings[0]), adxl_decode_reading(&readings[3]), adxl_decode_reading(&readings[6]));
                         
-                        theFile.read[count_readings].index = count_readings;
-                        theFile.read[count_readings].x = adxl_decode_reading(&readings[0]);
-                        theFile.read[count_readings].y = adxl_decode_reading(&readings[3]);
-                        theFile.read[count_readings].z = adxl_decode_reading(&readings[6]);
+                        if (ret == ESP_OK)
+                        {
+                            theFile.read[count_readings].index = count_readings;
+                            theFile.read[count_readings].x = adxl_decode_reading(&readings[0]);
+                            theFile.read[count_readings].y = adxl_decode_reading(&readings[3]);
+                            theFile.read[count_readings].z = adxl_decode_reading(&readings[6]);
+                        }
+                        else
+                        {
+                            ;
+                        }
                                                 
                         count_readings ++;
 
@@ -387,6 +395,7 @@ static void i2c_test_task(void* arg)
     tg1_timer_deinit(TIMER_0);
 
     /* End this task - we are done!   */
+    ESP_LOGI(TAG, "Ending task i2c_test_task");
     vTaskDelete(NULL);
 
 }
