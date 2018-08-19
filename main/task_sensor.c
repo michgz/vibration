@@ -239,13 +239,7 @@ static float adxl_decode_reading(uint8_t raw_data[3])
 
 
 
-
-
-static FILE_STRUCT_t   theFile;
-
-
-
-static int write_into_a_file(int number_to_write, FILE_STRUCT_t * f_in)
+static esp_err_t write_into_a_file(int number_to_write, FILE_STRUCT_t * f_in)
 {
 
     ESP_LOGI(TAG, "Initializing SPIFFS");
@@ -269,7 +263,7 @@ static int write_into_a_file(int number_to_write, FILE_STRUCT_t * f_in)
         } else {
             ESP_LOGE(TAG, "Failed to initialize SPIFFS (%s)", esp_err_to_name(ret));
         }
-        return;
+        return ret;
     }
 
     // Create a file.
@@ -280,7 +274,7 @@ static int write_into_a_file(int number_to_write, FILE_STRUCT_t * f_in)
         FILE* f = fopen(c, "w");
         if (f == NULL) {
             ESP_LOGE(TAG, "Failed to open file for writing");
-            return;
+            return ESP_FAIL;
         }
         fwrite(f_in, sizeof(FILE_STRUCT_t)/sizeof(float), sizeof(float), f);
         fclose(f);
@@ -291,8 +285,13 @@ static int write_into_a_file(int number_to_write, FILE_STRUCT_t * f_in)
     // All done, unmount partition and disable SPIFFS
     esp_vfs_spiffs_unregister(NULL);
     ESP_LOGI(TAG, "SPIFFS unmounted");
-
+    
+    return ESP_OK;
 }
+
+
+
+static FILE_STRUCT_t   theFile;
 
 static void i2c_test_task(void* arg)
 {
@@ -311,8 +310,6 @@ static void i2c_test_task(void* arg)
 
     ret = i2c_adxl_read_device_id(I2C_MASTER_NUM, dev_id);
     ESP_LOGI(TAG, "i2c_adxl_read_device_id returned %d", ret);
-
-ret = 8;    
 
     if (ret == ESP_OK)
     {
@@ -497,6 +494,9 @@ static void tg1_timer_init(int timer_idx,
     timer_start(TIMER_GROUP_1, timer_idx);
 }
 
+/*
+ * De-initialise the selected timer of group1.
+ */
 static void tg1_timer_deinit(int timer_idx)
 {
     timer_pause(TIMER_GROUP_1, timer_idx);
