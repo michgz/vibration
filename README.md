@@ -30,3 +30,7 @@ Components:
 # Software Dependencies
 
 - ESP-IDF v3.0
+
+# Releases
+- v0.0.1  19-Aug-2018.
+     A very basic first working version. Expect lots of bugs! (Also, LSM6DS3 not supported yet)
